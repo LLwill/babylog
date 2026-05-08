@@ -2,7 +2,39 @@
   "color": [
     {
       "name": "start_window_background",
+      "value": "#FFF8F0"
+    },
+    {
+      "name": "color_primary",
+      "value": "#FF8C69"
+    },
+    {
+      "name": "color_secondary",
+      "value": "#7EC8C8"
+    },
+    {
+      "name": "color_accent",
+      "value": "#FFB347"
+    },
+    {
+      "name": "color_background",
+      "value": "#FFF8F0"
+    },
+    {
+      "name": "color_card",
       "value": "#FFFFFF"
+    },
+    {
+      "name": "color_text_primary",
+      "value": "#333333"
+    },
+    {
+      "name": "color_text_secondary",
+      "value": "#666666"
+    },
+    {
+      "name": "color_text_hint",
+      "value": "#999999"
     }
   ]
 }
