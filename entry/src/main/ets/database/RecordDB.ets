@@ -18,6 +18,39 @@ const SQL_CREATE_TABLE = `
   )
 `
 
+// 新增记录时不需要 id 字段，用这个 interface 代替 Omit<BabyRecord, 'id'>
+export interface NewRecord {
+  type: RecordType
+  startTime: number
+  endTime: number
+  subType: string
+  note: string
+  imageUri: string
+  amount: number
+}
+
+// 更新记录时的可选字段
+export interface UpdateFields {
+  endTime?: number
+  note?: string
+  amount?: number
+  imageUri?: string
+}
+
+// getTodaySummary 的返回类型
+export interface TodaySummary {
+  feedCount: number
+  sleepMs: number
+  diaperCount: number
+}
+
+// cursor 临时行类型
+interface CursorRow {
+  type: string
+  startTime: number
+  endTime: number
+}
+
 let rdbStore: relationalStore.RdbStore | null = null
 
 export async function initDB(context: common.UIAbilityContext): Promise<void> {
@@ -36,28 +69,36 @@ function getStore(): relationalStore.RdbStore {
   return rdbStore
 }
 
-export async function insertRecord(record: Omit<BabyRecord, 'id'>): Promise<number> {
+export async function insertRecord(record: NewRecord): Promise<number> {
   const store = getStore()
   const valueBucket: relationalStore.ValuesBucket = {
-    type: record.type,
-    start_time: record.startTime,
-    end_time: record.endTime,
-    sub_type: record.subType,
-    note: record.note,
-    image_uri: record.imageUri,
-    amount: record.amount
+    'type': record.type as string,
+    'start_time': record.startTime,
+    'end_time': record.endTime,
+    'sub_type': record.subType,
+    'note': record.note,
+    'image_uri': record.imageUri,
+    'amount': record.amount
   }
   const rowId = await store.insert(TABLE_NAME, valueBucket)
   return rowId
 }
 
-export async function updateRecord(id: number, fields: Partial<BabyRecord>): Promise<void> {
+export async function updateRecord(id: number, fields: UpdateFields): Promise<void> {
   const store = getStore()
   const valueBucket: relationalStore.ValuesBucket = {}
-  if (fields.endTime !== undefined) valueBucket['end_time'] = fields.endTime
-  if (fields.note !== undefined) valueBucket['note'] = fields.note
-  if (fields.amount !== undefined) valueBucket['amount'] = fields.amount
-  if (fields.imageUri !== undefined) valueBucket['image_uri'] = fields.imageUri
+  if (fields.endTime !== undefined) {
+    valueBucket['end_time'] = fields.endTime
+  }
+  if (fields.note !== undefined) {
+    valueBucket['note'] = fields.note
+  }
+  if (fields.amount !== undefined) {
+    valueBucket['amount'] = fields.amount
+  }
+  if (fields.imageUri !== undefined) {
+    valueBucket['image_uri'] = fields.imageUri
+  }
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.equalTo('id', id)
   await store.update(valueBucket, predicates)
@@ -74,7 +115,8 @@ export async function getRecentRecords(limit: number): Promise<BabyRecord[]> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.orderByDesc('start_time').limitAs(limit)
-  const cursor = await store.query(predicates, ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
   return cursorToRecords(cursor)
 }
 
@@ -88,50 +130,58 @@ export async function getRecordsByDate(dateStr: string): Promise<BabyRecord[]> {
     .and()
     .lessThan('start_time', endOfDay)
     .orderByDesc('start_time')
-  const cursor = await store.query(predicates, ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
   return cursorToRecords(cursor)
 }
 
 export async function getLastRecord(type: RecordType): Promise<BabyRecord | null> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
-  predicates.equalTo('type', type).orderByDesc('start_time').limitAs(1)
-  const cursor = await store.query(predicates, ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  predicates.equalTo('type', type as string).orderByDesc('start_time').limitAs(1)
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
   const records = cursorToRecords(cursor)
   return records.length > 0 ? records[0] : null
 }
 
-export async function getTodaySummary(): Promise<{ feedCount: number, sleepMs: number, diaperCount: number }> {
+export async function getTodaySummary(): Promise<TodaySummary> {
   const now = new Date()
   const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime()
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.greaterThanOrEqualTo('start_time', startOfDay)
   const cursor = await store.query(predicates, ['type', 'start_time', 'end_time'])
-  const records: Array<{ type: string, startTime: number, endTime: number }> = []
+  const rows: CursorRow[] = []
   while (cursor.goToNextRow()) {
-    records.push({
+    const row: CursorRow = {
       type: cursor.getString(cursor.getColumnIndex('type')),
       startTime: cursor.getLong(cursor.getColumnIndex('start_time')),
       endTime: cursor.getLong(cursor.getColumnIndex('end_time'))
-    })
+    }
+    rows.push(row)
   }
   cursor.close()
   let feedCount = 0
   let sleepMs = 0
   let diaperCount = 0
-  for (const r of records) {
-    if (r.type === RecordType.FEED) feedCount++
-    else if (r.type === RecordType.DIAPER) diaperCount++
-    else if (r.type === RecordType.SLEEP && r.endTime > 0) sleepMs += (r.endTime - r.startTime)
+  for (const r of rows) {
+    if (r.type === RecordType.FEED as string) {
+      feedCount++
+    } else if (r.type === RecordType.DIAPER as string) {
+      diaperCount++
+    } else if (r.type === RecordType.SLEEP as string && r.endTime > 0) {
+      sleepMs += (r.endTime - r.startTime)
+    }
   }
-  return { feedCount, sleepMs, diaperCount }
+  const result: TodaySummary = { feedCount, sleepMs, diaperCount }
+  return result
 }
 
 function cursorToRecords(cursor: relationalStore.ResultSet): BabyRecord[] {
   const records: BabyRecord[] = []
   while (cursor.goToNextRow()) {
-    records.push({
+    const record: BabyRecord = {
       id: cursor.getLong(cursor.getColumnIndex('id')),
       type: cursor.getString(cursor.getColumnIndex('type')) as RecordType,
       startTime: cursor.getLong(cursor.getColumnIndex('start_time')),
@@ -140,7 +190,8 @@ function cursorToRecords(cursor: relationalStore.ResultSet): BabyRecord[] {
       note: cursor.getString(cursor.getColumnIndex('note')),
       imageUri: cursor.getString(cursor.getColumnIndex('image_uri')),
       amount: cursor.getDouble(cursor.getColumnIndex('amount'))
-    })
+    }
+    records.push(record)
   }
   cursor.close()
   return records

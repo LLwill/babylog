@@ -1,20 +1,28 @@
 import router from '@ohos.router'
 import vibrator from '@ohos.vibrator'
 import {
-  RecordType, FeedType, DiaperType,
+  RecordType, FeedType,
   BabyRecord, ActiveActivity,
   formatTimeAgo, formatTime, formatDuration,
   recordTypeIcon, feedTypeLabel, diaperTypeLabel, formatDate
 } from '../model/RecordModel'
 import {
   insertRecord, getRecentRecords, getLastRecord,
-  updateRecord, getTodaySummary, deleteRecord
+  updateRecord, getTodaySummary
 } from '../database/RecordDB'
+import { TodaySummary } from '../database/RecordDB'
+
+function doVibrate(duration: number): void {
+  try {
+    const effect: vibrator.VibrateTime = { type: 'time', duration: duration }
+    const attr: vibrator.VibrateAttribute = { id: 0, usage: 'touch' }
+    vibrator.startVibration(effect, attr)
+  } catch (_e) {}
+}
 
 @Entry
 @Component
 struct Index {
-  // 活动状态
   @StorageLink('activeActivity') activeActivity: string = ''
   @State recentRecords: BabyRecord[] = []
   @State lastFeedTime: number = 0
@@ -27,7 +35,6 @@ struct Index {
   @State showFeedSheet: boolean = false
   @State currentTime: number = Date.now()
 
-  private timerInterval: number = -1
   private clockInterval: number = -1
 
   aboutToAppear(): void {
@@ -36,8 +43,9 @@ struct Index {
   }
 
   aboutToDisappear(): void {
-    if (this.timerInterval !== -1) clearInterval(this.timerInterval)
-    if (this.clockInterval !== -1) clearInterval(this.clockInterval)
+    if (this.clockInterval !== -1) {
+      clearInterval(this.clockInterval)
+    }
   }
 
   startClock(): void {
@@ -52,17 +60,15 @@ struct Index {
 
   async loadData(): Promise<void> {
     try {
-      const [recent, lastFeed, lastDiaper, lastSleep, summary] = await Promise.all([
-        getRecentRecords(10),
-        getLastRecord(RecordType.FEED),
-        getLastRecord(RecordType.DIAPER),
-        getLastRecord(RecordType.SLEEP),
-        getTodaySummary()
-      ])
+      const recent = await getRecentRecords(10)
+      const lastFeed = await getLastRecord(RecordType.FEED)
+      const lastDiaper = await getLastRecord(RecordType.DIAPER)
+      const lastSleep = await getLastRecord(RecordType.SLEEP)
+      const summary: TodaySummary = await getTodaySummary()
       this.recentRecords = recent
-      this.lastFeedTime = lastFeed?.startTime ?? 0
-      this.lastDiaperTime = lastDiaper?.startTime ?? 0
-      this.lastSleepTime = lastSleep?.startTime ?? 0
+      this.lastFeedTime = lastFeed !== null ? lastFeed.startTime : 0
+      this.lastDiaperTime = lastDiaper !== null ? lastDiaper.startTime : 0
+      this.lastSleepTime = lastSleep !== null ? lastSleep.startTime : 0
       this.feedCount = summary.feedCount
       this.diaperCount = summary.diaperCount
       const sleepH = summary.sleepMs / 3600000
@@ -73,7 +79,9 @@ struct Index {
   }
 
   getActiveActivity(): ActiveActivity | null {
-    if (!this.activeActivity) return null
+    if (!this.activeActivity) {
+      return null
+    }
     try {
       return JSON.parse(this.activeActivity) as ActiveActivity
     } catch {
@@ -82,30 +90,28 @@ struct Index {
   }
 
   async startFeed(subType: FeedType): Promise<void> {
-    try {
-      vibrator.startVibration({ type: 'time', duration: 50 }, { id: 0, usage: 'touch' })
-    } catch (_) {}
+    doVibrate(50)
     const now = Date.now()
     const id = await insertRecord({
       type: RecordType.FEED,
       startTime: now,
       endTime: 0,
-      subType: subType,
+      subType: subType as string,
       note: '',
       imageUri: '',
       amount: 0
     })
-    const act: ActiveActivity = { type: RecordType.FEED, startTime: now, subType: subType, recordId: id }
+    const act: ActiveActivity = { type: RecordType.FEED, startTime: now, subType: subType as string, recordId: id }
     this.activeActivity = JSON.stringify(act)
     this.showFeedSheet = false
   }
 
   async endFeed(): Promise<void> {
     const act = this.getActiveActivity()
-    if (!act || act.type !== RecordType.FEED) return
-    try {
-      vibrator.startVibration({ type: 'time', duration: 100 }, { id: 0, usage: 'touch' })
-    } catch (_) {}
+    if (act === null || act.type !== RecordType.FEED) {
+      return
+    }
+    doVibrate(100)
     await updateRecord(act.recordId, { endTime: Date.now() })
     this.activeActivity = ''
     this.timerSeconds = 0
@@ -113,9 +119,7 @@ struct Index {
   }
 
   async startSleep(): Promise<void> {
-    try {
-      vibrator.startVibration({ type: 'time', duration: 50 }, { id: 0, usage: 'touch' })
-    } catch (_) {}
+    doVibrate(50)
     const now = Date.now()
     const id = await insertRecord({
       type: RecordType.SLEEP,
@@ -132,23 +136,21 @@ struct Index {
 
   async endSleep(): Promise<void> {
     const act = this.getActiveActivity()
-    if (!act || act.type !== RecordType.SLEEP) return
-    try {
-      vibrator.startVibration({ type: 'time', duration: 100 }, { id: 0, usage: 'touch' })
-    } catch (_) {}
+    if (act === null || act.type !== RecordType.SLEEP) {
+      return
+    }
+    doVibrate(100)
     await updateRecord(act.recordId, { endTime: Date.now() })
     this.activeActivity = ''
     this.timerSeconds = 0
     await this.loadData()
   }
 
-  // 状态卡内容
   @Builder
   StatusCard() {
     const act = this.getActiveActivity()
     Column() {
       if (act === null) {
-        // 无活动 — 显示上次记录时间
         Column({ space: 16 }) {
           Text('宝宝状态')
             .fontSize(14)
@@ -177,7 +179,6 @@ struct Index {
         .width('100%')
         .alignItems(HorizontalAlign.Center)
       } else if (act.type === RecordType.FEED) {
-        // 喂奶中
         Column({ space: 12 }) {
           Text('🍼 喂奶中').fontSize(16).fontColor('#FF8C69').fontWeight(FontWeight.Medium)
           Text(feedTypeLabel(act.subType)).fontSize(13).fontColor('#999')
@@ -185,19 +186,16 @@ struct Index {
             .fontSize(48)
             .fontWeight(FontWeight.Bold)
             .fontColor('#FF8C69')
-            .animation({ duration: 300 })
           Text(`开始于 ${formatTime(act.startTime)}`).fontSize(12).fontColor('#aaa')
         }
         .alignItems(HorizontalAlign.Center)
       } else if (act.type === RecordType.SLEEP) {
-        // 睡眠中
         Column({ space: 12 }) {
           Text('😴 睡眠中').fontSize(16).fontColor('#7EC8C8').fontWeight(FontWeight.Medium)
           Text(formatDuration(this.timerSeconds * 1000))
             .fontSize(48)
             .fontWeight(FontWeight.Bold)
             .fontColor('#7EC8C8')
-            .animation({ duration: 300 })
           Text(`入睡于 ${formatTime(act.startTime)}`).fontSize(12).fontColor('#aaa')
         }
         .alignItems(HorizontalAlign.Center)
@@ -212,13 +210,11 @@ struct Index {
     .height(180)
   }
 
-  // 底部操作按钮
   @Builder
   ActionButtons() {
     const act = this.getActiveActivity()
     Row({ space: 12 }) {
       if (act === null) {
-        // 三大操作按钮
         Button('🍼 喂奶')
           .onClick(() => { this.showFeedSheet = true })
           .backgroundColor('#FF8C69')
@@ -272,7 +268,6 @@ struct Index {
     .padding({ left: 16, right: 16 })
   }
 
-  // 喂奶类型选择 Sheet
   @Builder
   FeedSheet() {
     Column({ space: 16 }) {
@@ -334,7 +329,6 @@ struct Index {
     .backgroundColor('#FFF8F0')
   }
 
-  // 最近记录时间线
   @Builder
   RecentTimeline() {
     Column({ space: 8 }) {
@@ -389,10 +383,8 @@ struct Index {
 
   build() {
     Stack() {
-      // 主内容
       Scroll() {
         Column({ space: 16 }) {
-          // 顶部：宝宝信息 + 今日摘要
           Row() {
             Column({ space: 2 }) {
               Text('宝宝').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#333')
@@ -417,13 +409,8 @@ struct Index {
           .width('100%')
           .padding({ left: 4, right: 4 })
 
-          // 状态卡
           this.StatusCard()
-
-          // 最近记录
           this.RecentTimeline()
-
-          // 底部留白（给固定按钮留空间）
           Blank().height(88)
         }
         .padding({ top: 16, left: 20, right: 20, bottom: 20 })
@@ -433,7 +420,6 @@ struct Index {
       .width('100%')
       .height('100%')
 
-      // 固定底部操作区
       Column() {
         Blank()
         Column() {
@@ -450,8 +436,7 @@ struct Index {
     .width('100%')
     .height('100%')
     .backgroundColor('#FFF8F0')
-    // 喂奶选择 Sheet
-    .bindSheet($$this.showFeedSheet, this.FeedSheet(), {
+    .bindSheet($showFeedSheet, this.FeedSheet(), {
       height: 280,
       dragBar: true,
       backgroundColor: '#FFF8F0'

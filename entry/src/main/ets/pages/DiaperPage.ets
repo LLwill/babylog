@@ -4,6 +4,14 @@ import picker from '@ohos.file.picker'
 import { RecordType, DiaperType } from '../model/RecordModel'
 import { insertRecord } from '../database/RecordDB'
 
+function doVibrate(duration: number): void {
+  try {
+    const effect: vibrator.VibrateTime = { type: 'time', duration: duration }
+    const attr: vibrator.VibrateAttribute = { id: 0, usage: 'touch' }
+    vibrator.startVibration(effect, attr)
+  } catch (_e) {}
+}
+
 @Entry
 @Component
 struct DiaperPage {
@@ -13,12 +21,6 @@ struct DiaperPage {
   @State saving: boolean = false
 
   private colorOptions: string[] = ['黄色', '绿色', '黑色', '其他']
-
-  async vibrate(duration: number): Promise<void> {
-    try {
-      vibrator.startVibration({ type: 'time', duration: duration }, { id: 0, usage: 'touch' })
-    } catch (_) {}
-  }
 
   async pickPhoto(): Promise<void> {
     try {
@@ -39,7 +41,7 @@ struct DiaperPage {
     if (!this.selectedType || this.saving) return
     this.saving = true
     try {
-      await this.vibrate(80)
+      doVibrate(80)
       const now = Date.now()
       await insertRecord({
         type: RecordType.DIAPER,
@@ -70,8 +72,8 @@ struct DiaperPage {
     .justifyContent(FlexAlign.Center)
     .shadow({ radius: 8, color: '#0F000000', offsetX: 0, offsetY: 2 })
     .border(this.selectedType === type ? { width: 2, color: color } : { width: 0, color: Color.Transparent })
-    .onClick(async () => {
-      await this.vibrate(50)
+    .onClick(() => {
+      doVibrate(50)
       this.selectedType = type
     })
     .animation({ duration: 200 })
@@ -127,8 +129,8 @@ struct DiaperPage {
               .justifyContent(FlexAlign.Center)
               .shadow({ radius: 8, color: '#0F000000', offsetX: 0, offsetY: 2 })
               .border(this.selectedType === DiaperType.MIXED ? { width: 2, color: '#CE93D8' } : { width: 0, color: Color.Transparent })
-              .onClick(async () => {
-                await this.vibrate(50)
+              .onClick(() => {
+                doVibrate(50)
                 this.selectedType = DiaperType.MIXED
               })
               .animation({ duration: 200 })
