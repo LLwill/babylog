@@ -8,9 +8,8 @@ import {
 } from '../model/RecordModel'
 import {
   insertRecord, getRecentRecords, getLastRecord,
-  updateRecord, getTodaySummary
+  updateRecord, getTodaySummary, TodaySummary
 } from '../database/RecordDB'
-import { TodaySummary } from '../database/RecordDB'
 
 function doVibrate(duration: number): void {
   try {
@@ -20,10 +19,20 @@ function doVibrate(duration: number): void {
   } catch (_e) {}
 }
 
+// 当前活动类型：'' = 无活动, 'FEED' = 喂奶中, 'SLEEP' = 睡眠中
+type ActivityState = '' | 'FEED' | 'SLEEP'
+
 @Entry
 @Component
 struct Index {
   @StorageLink('activeActivity') activeActivity: string = ''
+
+  // 派生状态：直接用 @State 跟踪，避免在 @Builder 里调用方法
+  @State activityState: ActivityState = ''
+  @State activityStartTime: number = 0
+  @State activitySubType: string = ''
+  @State activityRecordId: number = 0
+
   @State recentRecords: BabyRecord[] = []
   @State lastFeedTime: number = 0
   @State lastDiaperTime: number = 0
@@ -38,6 +47,7 @@ struct Index {
   private clockInterval: number = -1
 
   aboutToAppear(): void {
+    this.restoreActivity()
     this.loadData()
     this.startClock()
   }
@@ -48,12 +58,35 @@ struct Index {
     }
   }
 
+  // 从 AppStorage 恢复活动状态到各个 @State 字段
+  restoreActivity(): void {
+    if (!this.activeActivity) {
+      this.activityState = ''
+      return
+    }
+    try {
+      const act: ActiveActivity = JSON.parse(this.activeActivity) as ActiveActivity
+      if (act.type === RecordType.FEED) {
+        this.activityState = 'FEED'
+      } else if (act.type === RecordType.SLEEP) {
+        this.activityState = 'SLEEP'
+      } else {
+        this.activityState = ''
+      }
+      this.activityStartTime = act.startTime
+      this.activitySubType = act.subType
+      this.activityRecordId = act.recordId
+      this.timerSeconds = Math.floor((Date.now() - act.startTime) / 1000)
+    } catch {
+      this.activityState = ''
+    }
+  }
+
   startClock(): void {
     this.clockInterval = setInterval(() => {
       this.currentTime = Date.now()
-      if (this.activeActivity) {
-        const act: ActiveActivity = JSON.parse(this.activeActivity) as ActiveActivity
-        this.timerSeconds = Math.floor((Date.now() - act.startTime) / 1000)
+      if (this.activityState !== '') {
+        this.timerSeconds = Math.floor((Date.now() - this.activityStartTime) / 1000)
       }
     }, 1000)
   }
@@ -78,15 +111,26 @@ struct Index {
     }
   }
 
-  getActiveActivity(): ActiveActivity | null {
-    if (!this.activeActivity) {
-      return null
+  saveActivity(type: RecordType, startTime: number, subType: string, recordId: number): void {
+    const act: ActiveActivity = { type, startTime, subType, recordId }
+    this.activeActivity = JSON.stringify(act)
+    if (type === RecordType.FEED) {
+      this.activityState = 'FEED'
+    } else if (type === RecordType.SLEEP) {
+      this.activityState = 'SLEEP'
     }
-    try {
-      return JSON.parse(this.activeActivity) as ActiveActivity
-    } catch {
-      return null
-    }
+    this.activityStartTime = startTime
+    this.activitySubType = subType
+    this.activityRecordId = recordId
+  }
+
+  clearActivity(): void {
+    this.activeActivity = ''
+    this.activityState = ''
+    this.activityStartTime = 0
+    this.activitySubType = ''
+    this.activityRecordId = 0
+    this.timerSeconds = 0
   }
 
   async startFeed(subType: FeedType): Promise<void> {
@@ -101,20 +145,15 @@ struct Index {
       imageUri: '',
       amount: 0
     })
-    const act: ActiveActivity = { type: RecordType.FEED, startTime: now, subType: subType as string, recordId: id }
-    this.activeActivity = JSON.stringify(act)
+    this.saveActivity(RecordType.FEED, now, subType as string, id)
     this.showFeedSheet = false
   }
 
   async endFeed(): Promise<void> {
-    const act = this.getActiveActivity()
-    if (act === null || act.type !== RecordType.FEED) {
-      return
-    }
+    if (this.activityState !== 'FEED') return
     doVibrate(100)
-    await updateRecord(act.recordId, { endTime: Date.now() })
-    this.activeActivity = ''
-    this.timerSeconds = 0
+    await updateRecord(this.activityRecordId, { endTime: Date.now() })
+    this.clearActivity()
     await this.loadData()
   }
 
@@ -130,31 +169,26 @@ struct Index {
       imageUri: '',
       amount: 0
     })
-    const act: ActiveActivity = { type: RecordType.SLEEP, startTime: now, subType: '', recordId: id }
-    this.activeActivity = JSON.stringify(act)
+    this.saveActivity(RecordType.SLEEP, now, '', id)
   }
 
   async endSleep(): Promise<void> {
-    const act = this.getActiveActivity()
-    if (act === null || act.type !== RecordType.SLEEP) {
-      return
-    }
+    if (this.activityState !== 'SLEEP') return
     doVibrate(100)
-    await updateRecord(act.recordId, { endTime: Date.now() })
-    this.activeActivity = ''
-    this.timerSeconds = 0
+    await updateRecord(this.activityRecordId, { endTime: Date.now() })
+    this.clearActivity()
     await this.loadData()
   }
 
+  // ── @Builder 里只放纯 UI，不调用任何方法 ──
+
   @Builder
   StatusCard() {
-    const act = this.getActiveActivity()
     Column() {
-      if (act === null) {
+      if (this.activityState === '') {
+        // 无活动
         Column({ space: 16 }) {
-          Text('宝宝状态')
-            .fontSize(14)
-            .fontColor('#999')
+          Text('宝宝状态').fontSize(14).fontColor('#999')
           Row({ space: 24 }) {
             Column({ space: 4 }) {
               Text('🍼').fontSize(24)
@@ -178,25 +212,23 @@ struct Index {
         }
         .width('100%')
         .alignItems(HorizontalAlign.Center)
-      } else if (act.type === RecordType.FEED) {
+      } else if (this.activityState === 'FEED') {
+        // 喂奶中
         Column({ space: 12 }) {
           Text('🍼 喂奶中').fontSize(16).fontColor('#FF8C69').fontWeight(FontWeight.Medium)
-          Text(feedTypeLabel(act.subType)).fontSize(13).fontColor('#999')
+          Text(feedTypeLabel(this.activitySubType)).fontSize(13).fontColor('#999')
           Text(formatDuration(this.timerSeconds * 1000))
-            .fontSize(48)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#FF8C69')
-          Text(`开始于 ${formatTime(act.startTime)}`).fontSize(12).fontColor('#aaa')
+            .fontSize(48).fontWeight(FontWeight.Bold).fontColor('#FF8C69')
+          Text(`开始于 ${formatTime(this.activityStartTime)}`).fontSize(12).fontColor('#aaa')
         }
         .alignItems(HorizontalAlign.Center)
-      } else if (act.type === RecordType.SLEEP) {
+      } else if (this.activityState === 'SLEEP') {
+        // 睡眠中
         Column({ space: 12 }) {
           Text('😴 睡眠中').fontSize(16).fontColor('#7EC8C8').fontWeight(FontWeight.Medium)
           Text(formatDuration(this.timerSeconds * 1000))
-            .fontSize(48)
-            .fontWeight(FontWeight.Bold)
-            .fontColor('#7EC8C8')
-          Text(`入睡于 ${formatTime(act.startTime)}`).fontSize(12).fontColor('#aaa')
+            .fontSize(48).fontWeight(FontWeight.Bold).fontColor('#7EC8C8')
+          Text(`入睡于 ${formatTime(this.activityStartTime)}`).fontSize(12).fontColor('#aaa')
         }
         .alignItems(HorizontalAlign.Center)
       }
@@ -212,56 +244,35 @@ struct Index {
 
   @Builder
   ActionButtons() {
-    const act = this.getActiveActivity()
     Row({ space: 12 }) {
-      if (act === null) {
+      if (this.activityState === '') {
         Button('🍼 喂奶')
           .onClick(() => { this.showFeedSheet = true })
-          .backgroundColor('#FF8C69')
-          .fontColor(Color.White)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .height(56)
-          .layoutWeight(1)
-          .borderRadius(16)
+          .backgroundColor('#FF8C69').fontColor(Color.White)
+          .fontSize(16).fontWeight(FontWeight.Medium)
+          .height(56).layoutWeight(1).borderRadius(16)
         Button('🧷 换尿布')
           .onClick(() => { router.pushUrl({ url: 'pages/DiaperPage' }) })
-          .backgroundColor('#FFB347')
-          .fontColor(Color.White)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .height(56)
-          .layoutWeight(1)
-          .borderRadius(16)
+          .backgroundColor('#FFB347').fontColor(Color.White)
+          .fontSize(16).fontWeight(FontWeight.Medium)
+          .height(56).layoutWeight(1).borderRadius(16)
         Button('😴 睡着了')
           .onClick(() => { this.startSleep() })
-          .backgroundColor('#7EC8C8')
-          .fontColor(Color.White)
-          .fontSize(16)
-          .fontWeight(FontWeight.Medium)
-          .height(56)
-          .layoutWeight(1)
-          .borderRadius(16)
-      } else if (act.type === RecordType.FEED) {
+          .backgroundColor('#7EC8C8').fontColor(Color.White)
+          .fontSize(16).fontWeight(FontWeight.Medium)
+          .height(56).layoutWeight(1).borderRadius(16)
+      } else if (this.activityState === 'FEED') {
         Button('✅ 结束喂奶')
           .onClick(() => { this.endFeed() })
-          .backgroundColor('#FF8C69')
-          .fontColor(Color.White)
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .height(60)
-          .width('100%')
-          .borderRadius(16)
-      } else if (act.type === RecordType.SLEEP) {
+          .backgroundColor('#FF8C69').fontColor(Color.White)
+          .fontSize(18).fontWeight(FontWeight.Bold)
+          .height(60).width('100%').borderRadius(16)
+      } else if (this.activityState === 'SLEEP') {
         Button('☀️ 宝宝醒了')
           .onClick(() => { this.endSleep() })
-          .backgroundColor('#7EC8C8')
-          .fontColor(Color.White)
-          .fontSize(18)
-          .fontWeight(FontWeight.Bold)
-          .height(60)
-          .width('100%')
-          .borderRadius(16)
+          .backgroundColor('#7EC8C8').fontColor(Color.White)
+          .fontSize(18).fontWeight(FontWeight.Bold)
+          .height(60).width('100%').borderRadius(16)
       }
     }
     .width('100%')
@@ -272,61 +283,40 @@ struct Index {
   FeedSheet() {
     Column({ space: 16 }) {
       Text('选择喂奶方式')
-        .fontSize(16)
-        .fontWeight(FontWeight.Medium)
-        .margin({ top: 12 })
+        .fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 12 })
       Grid() {
         GridItem() {
           Button('左乳')
             .onClick(() => { this.startFeed(FeedType.LEFT) })
-            .backgroundColor('#FFF0E8')
-            .fontColor('#FF8C69')
-            .fontSize(18)
-            .width('100%')
-            .height(70)
-            .borderRadius(14)
+            .backgroundColor('#FFF0E8').fontColor('#FF8C69')
+            .fontSize(18).width('100%').height(70).borderRadius(14)
         }
         GridItem() {
           Button('右乳')
             .onClick(() => { this.startFeed(FeedType.RIGHT) })
-            .backgroundColor('#FFF0E8')
-            .fontColor('#FF8C69')
-            .fontSize(18)
-            .width('100%')
-            .height(70)
-            .borderRadius(14)
+            .backgroundColor('#FFF0E8').fontColor('#FF8C69')
+            .fontSize(18).width('100%').height(70).borderRadius(14)
         }
         GridItem() {
           Button('🍼 奶瓶')
             .onClick(() => { this.startFeed(FeedType.BOTTLE) })
-            .backgroundColor('#FFF0E8')
-            .fontColor('#FF8C69')
-            .fontSize(18)
-            .width('100%')
-            .height(70)
-            .borderRadius(14)
+            .backgroundColor('#FFF0E8').fontColor('#FF8C69')
+            .fontSize(18).width('100%').height(70).borderRadius(14)
         }
         GridItem() {
           Button('混合')
             .onClick(() => { this.startFeed(FeedType.MIXED) })
-            .backgroundColor('#FFF0E8')
-            .fontColor('#FF8C69')
-            .fontSize(18)
-            .width('100%')
-            .height(70)
-            .borderRadius(14)
+            .backgroundColor('#FFF0E8').fontColor('#FF8C69')
+            .fontSize(18).width('100%').height(70).borderRadius(14)
         }
       }
       .columnsTemplate('1fr 1fr')
-      .rowsGap(12)
-      .columnsGap(12)
+      .rowsGap(12).columnsGap(12)
       .padding({ left: 20, right: 20 })
-      .width('100%')
-      .height(160)
+      .width('100%').height(160)
       .margin({ bottom: 32 })
     }
-    .width('100%')
-    .backgroundColor('#FFF8F0')
+    .width('100%').backgroundColor('#FFF8F0')
   }
 
   @Builder
@@ -336,20 +326,16 @@ struct Index {
         Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium)
         Blank()
         Text('查看全部 >')
-          .fontSize(13)
-          .fontColor('#FF8C69')
+          .fontSize(13).fontColor('#FF8C69')
           .onClick(() => { router.pushUrl({ url: 'pages/HistoryPage' }) })
       }
-      .width('100%')
-      .padding({ left: 4, right: 4 })
+      .width('100%').padding({ left: 4, right: 4 })
 
       if (this.recentRecords.length === 0) {
         Text('暂无记录，开始记录宝宝的第一次吧 🌟')
-          .fontSize(13)
-          .fontColor('#aaa')
+          .fontSize(13).fontColor('#aaa')
           .textAlign(TextAlign.Center)
-          .width('100%')
-          .padding({ top: 12, bottom: 12 })
+          .width('100%').padding({ top: 12, bottom: 12 })
       } else {
         Scroll() {
           Row({ space: 10 }) {
@@ -366,8 +352,7 @@ struct Index {
                 }
               }
               .padding({ top: 10, bottom: 10, left: 14, right: 14 })
-              .backgroundColor('#FFFFFF')
-              .borderRadius(12)
+              .backgroundColor('#FFFFFF').borderRadius(12)
               .shadow({ radius: 4, color: '#0A000000', offsetX: 0, offsetY: 1 })
               .alignItems(HorizontalAlign.Center)
             })
@@ -375,8 +360,7 @@ struct Index {
           .padding({ bottom: 4 })
         }
         .scrollable(ScrollDirection.Horizontal)
-        .scrollBar(BarState.Off)
-        .width('100%')
+        .scrollBar(BarState.Off).width('100%')
       }
     }
   }
@@ -406,8 +390,7 @@ struct Index {
               }
             }
           }
-          .width('100%')
-          .padding({ left: 4, right: 4 })
+          .width('100%').padding({ left: 4, right: 4 })
 
           this.StatusCard()
           this.RecentTimeline()
@@ -417,8 +400,7 @@ struct Index {
       }
       .scrollable(ScrollDirection.Vertical)
       .scrollBar(BarState.Off)
-      .width('100%')
-      .height('100%')
+      .width('100%').height('100%')
 
       Column() {
         Blank()
@@ -429,17 +411,16 @@ struct Index {
         .backgroundColor('#FFF8F0')
         .shadow({ radius: 12, color: '#1A000000', offsetX: 0, offsetY: -2 })
       }
-      .width('100%')
-      .height('100%')
+      .width('100%').height('100%')
       .hitTestBehavior(HitTestMode.Transparent)
     }
-    .width('100%')
-    .height('100%')
+    .width('100%').height('100%')
     .backgroundColor('#FFF8F0')
-    .bindSheet($showFeedSheet, this.FeedSheet(), {
+    .bindSheet(this.showFeedSheet, this.FeedSheet(), {
       height: 280,
       dragBar: true,
-      backgroundColor: '#FFF8F0'
+      backgroundColor: '#FFF8F0',
+      onDisappear: () => { this.showFeedSheet = false }
     })
   }
 }
