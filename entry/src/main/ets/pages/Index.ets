@@ -564,7 +564,8 @@ struct Index {
     .width('100%').backgroundColor('#FFF8F0').alignItems(HorizontalAlign.Center)
   }
 
-
+  @Builder
+  RecentTimeline() {
     Column({ space: 0 }) {
       Row() {
         Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium)
