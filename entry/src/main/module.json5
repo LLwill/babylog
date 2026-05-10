@@ -15,10 +15,20 @@
         "name": "ohos.permission.VIBRATE"
       },
       {
-        "name": "ohos.permission.READ_IMAGEVIDEO"
+        "name": "ohos.permission.READ_IMAGEVIDEO",
+        "reason": "$string:permission_read_image_reason",
+        "usedScene": {
+          "abilities": ["EntryAbility"],
+          "when": "inuse"
+        }
       },
       {
-        "name": "ohos.permission.WRITE_IMAGEVIDEO"
+        "name": "ohos.permission.WRITE_IMAGEVIDEO",
+        "reason": "$string:permission_write_image_reason",
+        "usedScene": {
+          "abilities": ["EntryAbility"],
+          "when": "inuse"
+        }
       }
     ],
     "abilities": [
@@ -33,12 +43,8 @@
         "exported": true,
         "skills": [
           {
-            "entities": [
-              "entity.system.home"
-            ],
-            "actions": [
-              "ohos.want.action.home"
-            ]
+            "entities": ["entity.system.home"],
+            "actions": ["ohos.want.action.home"]
           }
         ]
       }

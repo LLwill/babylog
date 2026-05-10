@@ -15,6 +15,14 @@
     {
       "name": "app_name",
       "value": "BabyLog"
+    },
+    {
+      "name": "permission_read_image_reason",
+      "value": "用于换尿布记录时查看相册照片"
+    },
+    {
+      "name": "permission_write_image_reason",
+      "value": "用于换尿布记录时保存拍摄的照片"
     }
   ]
 }
