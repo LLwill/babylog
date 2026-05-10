@@ -63,6 +63,13 @@ struct Index {
     // 否则等 @Watch('onDbReady') 触发
   }
 
+  // 从换尿布/历史页返回时刷新数据
+  onPageShow(): void {
+    if (this.dbReady) {
+      this.loadData()
+    }
+  }
+
   onDbReady(): void {
     if (this.dbReady) {
       this.loadData()
@@ -416,40 +423,97 @@ struct Index {
 
   @Builder
   RecentTimeline() {
-    Column({ space: 8 }) {
-      Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium).padding({ left: 4 })
+    Column({ space: 0 }) {
+      Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium).padding({ left: 4, bottom: 12 })
+
       if (this.recentRecords.length === 0) {
         Text('暂无记录，点击下方按钮开始记录 🌟')
           .fontSize(13).fontColor('#bbb').textAlign(TextAlign.Center)
           .width('100%').padding({ top: 20, bottom: 20 })
       } else {
-        Scroll() {
-          Row({ space: 10 }) {
-            ForEach(this.recentRecords.slice(0, 10), (item: BabyRecord) => {
-              Column({ space: 4 }) {
-                Text(recordTypeIcon(item.type)).fontSize(22)
-                Text(formatTime(item.startTime)).fontSize(11).fontColor('#666')
-                if (item.type === RecordType.FEED && item.endTime > 0) {
-                  Text(formatDuration(item.endTime - item.startTime)).fontSize(10).fontColor('#aaa')
-                } else if (item.type === RecordType.DIAPER) {
-                  Text(diaperTypeLabel(item.subType)).fontSize(10).fontColor('#aaa')
-                } else if (item.type === RecordType.SLEEP && item.endTime > 0) {
-                  Text(formatDuration(item.endTime - item.startTime)).fontSize(10).fontColor('#aaa')
-                } else if (item.endTime === 0) {
-                  Text('进行中').fontSize(10).fontColor('#FF8C69')
+        Column({ space: 0 }) {
+          ForEach(this.recentRecords.slice(0, 10), (item: BabyRecord, index: number) => {
+            Row({ space: 0 }) {
+              // 左侧时间轴
+              Column() {
+                // 图标圆点
+                Column() {
+                  Text(recordTypeIcon(item.type)).fontSize(16)
+                }
+                .width(36).height(36)
+                .backgroundColor('#FFFFFF')
+                .borderRadius(18)
+                .border({ width: 2, color: this.timelineColor(item.type) })
+                .justifyContent(FlexAlign.Center)
+                .alignItems(HorizontalAlign.Center)
+                .shadow({ radius: 4, color: '#0F000000', offsetX: 0, offsetY: 1 })
+
+                // 竖线（最后一条不画）
+                if (index < this.recentRecords.slice(0, 10).length - 1) {
+                  Column()
+                    .width(2)
+                    .layoutWeight(1)
+                    .backgroundColor('#E8E8E8')
+                    .margin({ top: 2, bottom: 2 })
                 }
               }
-              .padding({ top: 10, bottom: 10, left: 14, right: 14 })
-              .backgroundColor('#FFFFFF').borderRadius(12)
-              .shadow({ radius: 4, color: '#0A000000', offsetX: 0, offsetY: 1 })
+              .width(36)
               .alignItems(HorizontalAlign.Center)
-            })
-          }
-          .padding({ bottom: 4 })
+
+              // 右侧内容
+              Column({ space: 2 }) {
+                Row() {
+                  Text(this.timelineTitle(item))
+                    .fontSize(14).fontWeight(FontWeight.Medium).fontColor('#333')
+                  Blank()
+                  Text(formatTimeAgo(item.startTime))
+                    .fontSize(12).fontColor('#bbb')
+                }
+                .width('100%')
+
+                if (this.timelineDetail(item)) {
+                  Text(this.timelineDetail(item))
+                    .fontSize(12).fontColor('#999')
+                }
+              }
+              .layoutWeight(1)
+              .padding({ left: 12, top: 4, bottom: index < this.recentRecords.slice(0, 10).length - 1 ? 20 : 4 })
+              .alignItems(HorizontalAlign.Start)
+            }
+            .width('100%')
+            .alignItems(VerticalAlign.Top)
+          })
         }
-        .scrollable(ScrollDirection.Horizontal).scrollBar(BarState.Off).width('100%')
+        .padding({ left: 4 })
       }
     }
+  }
+
+  timelineColor(type: RecordType): string {
+    if (type === RecordType.FEED) return '#FF8C69'
+    if (type === RecordType.SLEEP) return '#7EC8C8'
+    return '#FFB347'
+  }
+
+  timelineTitle(item: BabyRecord): string {
+    if (item.type === RecordType.FEED) {
+      return `喂奶 · ${feedTypeLabel(item.subType)}`
+    } else if (item.type === RecordType.DIAPER) {
+      return `换尿布 · ${diaperTypeLabel(item.subType)}`
+    } else {
+      return '睡眠'
+    }
+  }
+
+  timelineDetail(item: BabyRecord): string {
+    if (item.endTime === 0) return '进行中…'
+    if (item.type === RecordType.FEED || item.type === RecordType.SLEEP) {
+      return formatDuration(item.endTime - item.startTime)
+    }
+    if (item.type === RecordType.DIAPER && item.note) {
+      return item.note
+    }
+    return ''
   }
 
   build() {
