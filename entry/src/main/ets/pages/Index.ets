@@ -731,7 +731,9 @@ struct Index {
         }
         .padding({ top: 16, left: 20, right: 20, bottom: 20 })
       }
-      .scrollable(ScrollDirection.Vertical).scrollBar(BarState.Off)
+      .scrollable(ScrollDirection.Vertical)
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.None)
       .layoutWeight(1).width('100%')
 
       // 固定底部操作栏
