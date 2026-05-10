@@ -19,7 +19,6 @@ function doVibrate(duration: number): void {
   } catch (_e) {}
 }
 
-// 当前活动类型：'' = 无活动, 'FEED' = 喂奶中, 'SLEEP' = 睡眠中
 type ActivityState = '' | 'FEED' | 'SLEEP'
 
 @Entry
@@ -27,7 +26,6 @@ type ActivityState = '' | 'FEED' | 'SLEEP'
 struct Index {
   @StorageLink('activeActivity') activeActivity: string = ''
 
-  // 派生状态：直接用 @State 跟踪，避免在 @Builder 里调用方法
   @State activityState: ActivityState = ''
   @State activityStartTime: number = 0
   @State activitySubType: string = ''
@@ -43,6 +41,8 @@ struct Index {
   @State timerSeconds: number = 0
   @State showFeedSheet: boolean = false
   @State currentTime: number = Date.now()
+  // 控制活动卡片是否展开结束按钮
+  @State activityCardExpanded: boolean = false
 
   private clockInterval: number = -1
 
@@ -58,7 +58,6 @@ struct Index {
     }
   }
 
-  // 从 AppStorage 恢复活动状态到各个 @State 字段
   restoreActivity(): void {
     if (!this.activeActivity) {
       this.activityState = ''
@@ -114,14 +113,11 @@ struct Index {
   saveActivity(type: RecordType, startTime: number, subType: string, recordId: number): void {
     const act: ActiveActivity = { type, startTime, subType, recordId }
     this.activeActivity = JSON.stringify(act)
-    if (type === RecordType.FEED) {
-      this.activityState = 'FEED'
-    } else if (type === RecordType.SLEEP) {
-      this.activityState = 'SLEEP'
-    }
+    this.activityState = type === RecordType.FEED ? 'FEED' : 'SLEEP'
     this.activityStartTime = startTime
     this.activitySubType = subType
     this.activityRecordId = recordId
+    this.activityCardExpanded = false
   }
 
   clearActivity(): void {
@@ -131,6 +127,7 @@ struct Index {
     this.activitySubType = ''
     this.activityRecordId = 0
     this.timerSeconds = 0
+    this.activityCardExpanded = false
   }
 
   async startFeed(subType: FeedType): Promise<void> {
@@ -180,110 +177,169 @@ struct Index {
     await this.loadData()
   }
 
-  // ── @Builder 里只放纯 UI，不调用任何方法 ──
-
+  // ── 进行中活动横幅（悬浮在顶部，随时可见） ──
   @Builder
-  StatusCard() {
-    Column() {
-      if (this.activityState === '') {
-        // 无活动
-        Column({ space: 16 }) {
-          Text('宝宝状态').fontSize(14).fontColor('#999')
-          Row({ space: 24 }) {
-            Column({ space: 4 }) {
-              Text('🍼').fontSize(24)
-              Text(this.lastFeedTime > 0 ? formatTimeAgo(this.lastFeedTime) : '未记录')
-                .fontSize(13).fontColor('#666')
-              Text('上次喂奶').fontSize(11).fontColor('#aaa')
-            }
-            Column({ space: 4 }) {
-              Text('🧷').fontSize(24)
-              Text(this.lastDiaperTime > 0 ? formatTimeAgo(this.lastDiaperTime) : '未记录')
-                .fontSize(13).fontColor('#666')
-              Text('上次换尿布').fontSize(11).fontColor('#aaa')
-            }
-            Column({ space: 4 }) {
-              Text('😴').fontSize(24)
-              Text(this.lastSleepTime > 0 ? formatTimeAgo(this.lastSleepTime) : '未记录')
-                .fontSize(13).fontColor('#666')
-              Text('上次入睡').fontSize(11).fontColor('#aaa')
-            }
+  ActivityBanner() {
+    if (this.activityState !== '') {
+      Column() {
+        // 点击展开/收起结束按钮
+        Row({ space: 12 }) {
+          Text(this.activityState === 'FEED' ? '🍼' : '😴').fontSize(20)
+          Column({ space: 2 }) {
+            Text(this.activityState === 'FEED' ? `喂奶中 · ${feedTypeLabel(this.activitySubType)}` : '睡眠中')
+              .fontSize(14).fontWeight(FontWeight.Medium)
+              .fontColor(this.activityState === 'FEED' ? '#FF8C69' : '#7EC8C8')
+            Text(`开始于 ${formatTime(this.activityStartTime)}`)
+              .fontSize(12).fontColor('#999')
           }
+          .alignItems(HorizontalAlign.Start)
+          Blank()
+          Text(formatDuration(this.timerSeconds * 1000))
+            .fontSize(20).fontWeight(FontWeight.Bold)
+            .fontColor(this.activityState === 'FEED' ? '#FF8C69' : '#7EC8C8')
+          Text(this.activityCardExpanded ? '∧' : '∨')
+            .fontSize(14).fontColor('#aaa').margin({ left: 4 })
         }
         .width('100%')
-        .alignItems(HorizontalAlign.Center)
-      } else if (this.activityState === 'FEED') {
-        // 喂奶中
-        Column({ space: 12 }) {
-          Text('🍼 喂奶中').fontSize(16).fontColor('#FF8C69').fontWeight(FontWeight.Medium)
-          Text(feedTypeLabel(this.activitySubType)).fontSize(13).fontColor('#999')
-          Text(formatDuration(this.timerSeconds * 1000))
-            .fontSize(48).fontWeight(FontWeight.Bold).fontColor('#FF8C69')
-          Text(`开始于 ${formatTime(this.activityStartTime)}`).fontSize(12).fontColor('#aaa')
+        .padding({ left: 16, right: 16, top: 14, bottom: this.activityCardExpanded ? 8 : 14 })
+        .onClick(() => { this.activityCardExpanded = !this.activityCardExpanded })
+
+        // 展开后显示结束按钮
+        if (this.activityCardExpanded) {
+          Button(this.activityState === 'FEED' ? '✅ 结束喂奶' : '☀️ 宝宝醒了')
+            .onClick(() => {
+              if (this.activityState === 'FEED') {
+                this.endFeed()
+              } else {
+                this.endSleep()
+              }
+            })
+            .backgroundColor(this.activityState === 'FEED' ? '#FF8C69' : '#7EC8C8')
+            .fontColor(Color.White)
+            .fontSize(16).fontWeight(FontWeight.Bold)
+            .height(48).width('100%')
+            .borderRadius(12)
+            .margin({ left: 16, right: 16, bottom: 14 })
+            .width('calc(100% - 32vp)')
         }
-        .alignItems(HorizontalAlign.Center)
-      } else if (this.activityState === 'SLEEP') {
-        // 睡眠中
-        Column({ space: 12 }) {
-          Text('😴 睡眠中').fontSize(16).fontColor('#7EC8C8').fontWeight(FontWeight.Medium)
-          Text(formatDuration(this.timerSeconds * 1000))
-            .fontSize(48).fontWeight(FontWeight.Bold).fontColor('#7EC8C8')
-          Text(`入睡于 ${formatTime(this.activityStartTime)}`).fontSize(12).fontColor('#aaa')
-        }
-        .alignItems(HorizontalAlign.Center)
       }
+      .width('100%')
+      .backgroundColor('#FFFFFF')
+      .borderRadius({ bottomLeft: 16, bottomRight: 16 })
+      .shadow({ radius: 8, color: '#1A000000', offsetX: 0, offsetY: 3 })
+      .animation({ duration: 200 })
     }
-    .width('100%')
-    .padding({ top: 24, bottom: 24, left: 20, right: 20 })
-    .backgroundColor('#FFFFFF')
-    .borderRadius(20)
-    .shadow({ radius: 8, color: '#1A000000', offsetX: 0, offsetY: 2 })
-    .justifyContent(FlexAlign.Center)
-    .height(180)
   }
 
+  // ── 上次记录状态卡 ──
+  @Builder
+  LastRecordCard() {
+    Row({ space: 0 }) {
+      Column({ space: 4 }) {
+        Text('🍼').fontSize(22)
+        Text(this.lastFeedTime > 0 ? formatTimeAgo(this.lastFeedTime) : '未记录')
+          .fontSize(12).fontColor('#666')
+        Text('上次喂奶').fontSize(11).fontColor('#aaa')
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
+
+      Divider().vertical(true).height(40).color('#F0F0F0')
+
+      Column({ space: 4 }) {
+        Text('🧷').fontSize(22)
+        Text(this.lastDiaperTime > 0 ? formatTimeAgo(this.lastDiaperTime) : '未记录')
+          .fontSize(12).fontColor('#666')
+        Text('上次换尿布').fontSize(11).fontColor('#aaa')
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
+
+      Divider().vertical(true).height(40).color('#F0F0F0')
+
+      Column({ space: 4 }) {
+        Text('😴').fontSize(22)
+        Text(this.lastSleepTime > 0 ? formatTimeAgo(this.lastSleepTime) : '未记录')
+          .fontSize(12).fontColor('#666')
+        Text('上次入睡').fontSize(11).fontColor('#aaa')
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
+    }
+    .width('100%')
+    .padding({ top: 16, bottom: 16 })
+    .backgroundColor('#FFFFFF')
+    .borderRadius(16)
+    .shadow({ radius: 6, color: '#0F000000', offsetX: 0, offsetY: 2 })
+  }
+
+  // ── 底部操作按钮（始终显示三个，不锁定） ──
   @Builder
   ActionButtons() {
-    Row({ space: 12 }) {
-      if (this.activityState === '') {
-        Button('🍼 喂奶')
+    Row({ space: 10 }) {
+      // 喂奶按钮：有活动中时变为带指示点的状态
+      Column({ space: 4 }) {
+        Button('🍼')
           .onClick(() => { this.showFeedSheet = true })
-          .backgroundColor('#FF8C69').fontColor(Color.White)
-          .fontSize(16).fontWeight(FontWeight.Medium)
-          .height(56).layoutWeight(1).borderRadius(16)
-        Button('🧷 换尿布')
-          .onClick(() => { router.pushUrl({ url: 'pages/DiaperPage' }) })
-          .backgroundColor('#FFB347').fontColor(Color.White)
-          .fontSize(16).fontWeight(FontWeight.Medium)
-          .height(56).layoutWeight(1).borderRadius(16)
-        Button('😴 睡着了')
-          .onClick(() => { this.startSleep() })
-          .backgroundColor('#7EC8C8').fontColor(Color.White)
-          .fontSize(16).fontWeight(FontWeight.Medium)
-          .height(56).layoutWeight(1).borderRadius(16)
-      } else if (this.activityState === 'FEED') {
-        Button('✅ 结束喂奶')
-          .onClick(() => { this.endFeed() })
-          .backgroundColor('#FF8C69').fontColor(Color.White)
-          .fontSize(18).fontWeight(FontWeight.Bold)
-          .height(60).width('100%').borderRadius(16)
-      } else if (this.activityState === 'SLEEP') {
-        Button('☀️ 宝宝醒了')
-          .onClick(() => { this.endSleep() })
-          .backgroundColor('#7EC8C8').fontColor(Color.White)
-          .fontSize(18).fontWeight(FontWeight.Bold)
-          .height(60).width('100%').borderRadius(16)
+          .backgroundColor(this.activityState === 'FEED' ? '#FF8C69' : '#FFF0E8')
+          .fontColor(this.activityState === 'FEED' ? Color.White : '#FF8C69')
+          .fontSize(24).width(64).height(64).borderRadius(32)
+        Text(this.activityState === 'FEED' ? '喂奶中' : '喂奶')
+          .fontSize(12)
+          .fontColor(this.activityState === 'FEED' ? '#FF8C69' : '#666')
+          .fontWeight(this.activityState === 'FEED' ? FontWeight.Bold : FontWeight.Normal)
       }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
+
+      // 换尿布按钮（始终可用）
+      Column({ space: 4 }) {
+        Button('🧷')
+          .onClick(() => { router.pushUrl({ url: 'pages/DiaperPage' }) })
+          .backgroundColor('#FFF3E0')
+          .fontColor('#FFB347')
+          .fontSize(24).width(64).height(64).borderRadius(32)
+        Text('换尿布').fontSize(12).fontColor('#666')
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
+
+      // 睡眠按钮
+      Column({ space: 4 }) {
+        Button('😴')
+          .onClick(() => {
+            if (this.activityState === 'SLEEP') {
+              this.activityCardExpanded = true
+            } else {
+              this.startSleep()
+            }
+          })
+          .backgroundColor(this.activityState === 'SLEEP' ? '#7EC8C8' : '#E8F6F6')
+          .fontColor(this.activityState === 'SLEEP' ? Color.White : '#7EC8C8')
+          .fontSize(24).width(64).height(64).borderRadius(32)
+        Text(this.activityState === 'SLEEP' ? '睡眠中' : '睡着了')
+          .fontSize(12)
+          .fontColor(this.activityState === 'SLEEP' ? '#7EC8C8' : '#666')
+          .fontWeight(this.activityState === 'SLEEP' ? FontWeight.Bold : FontWeight.Normal)
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
+
+      // 历史记录入口
+      Column({ space: 4 }) {
+        Button('📋')
+          .onClick(() => { router.pushUrl({ url: 'pages/HistoryPage' }) })
+          .backgroundColor('#F0F0F0')
+          .fontColor('#999')
+          .fontSize(24).width(64).height(64).borderRadius(32)
+        Text('历史').fontSize(12).fontColor('#666')
+      }
+      .layoutWeight(1).alignItems(HorizontalAlign.Center)
     }
     .width('100%')
-    .padding({ left: 16, right: 16 })
+    .padding({ left: 12, right: 12 })
   }
 
+  // ── 喂奶类型 Sheet ──
   @Builder
   FeedSheet() {
-    Column({ space: 16 }) {
-      Text('选择喂奶方式')
-        .fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 12 })
+    Column({ space: 12 }) {
+      Text(this.activityState === 'FEED' ? '喂奶进行中，重新开始？' : '选择喂奶方式')
+        .fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 16 })
       Grid() {
         GridItem() {
           Button('左乳')
@@ -310,36 +366,30 @@ struct Index {
             .fontSize(18).width('100%').height(70).borderRadius(14)
         }
       }
-      .columnsTemplate('1fr 1fr')
-      .rowsGap(12).columnsGap(12)
+      .columnsTemplate('1fr 1fr').rowsGap(12).columnsGap(12)
       .padding({ left: 20, right: 20 })
-      .width('100%').height(160)
-      .margin({ bottom: 32 })
+      .width('100%').height(160).margin({ bottom: 40 })
     }
     .width('100%').backgroundColor('#FFF8F0')
   }
 
+  // ── 最近记录时间线 ──
   @Builder
   RecentTimeline() {
     Column({ space: 8 }) {
-      Row() {
-        Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium)
-        Blank()
-        Text('查看全部 >')
-          .fontSize(13).fontColor('#FF8C69')
-          .onClick(() => { router.pushUrl({ url: 'pages/HistoryPage' }) })
-      }
-      .width('100%').padding({ left: 4, right: 4 })
+      Text('最近记录')
+        .fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium)
+        .padding({ left: 4 })
 
       if (this.recentRecords.length === 0) {
-        Text('暂无记录，开始记录宝宝的第一次吧 🌟')
-          .fontSize(13).fontColor('#aaa')
+        Text('暂无记录，点击下方按钮开始记录 🌟')
+          .fontSize(13).fontColor('#bbb')
           .textAlign(TextAlign.Center)
-          .width('100%').padding({ top: 12, bottom: 12 })
+          .width('100%').padding({ top: 20, bottom: 20 })
       } else {
         Scroll() {
           Row({ space: 10 }) {
-            ForEach(this.recentRecords.slice(0, 8), (item: BabyRecord) => {
+            ForEach(this.recentRecords.slice(0, 10), (item: BabyRecord) => {
               Column({ space: 4 }) {
                 Text(recordTypeIcon(item.type)).fontSize(22)
                 Text(formatTime(item.startTime)).fontSize(11).fontColor('#666')
@@ -349,6 +399,8 @@ struct Index {
                   Text(diaperTypeLabel(item.subType)).fontSize(10).fontColor('#aaa')
                 } else if (item.type === RecordType.SLEEP && item.endTime > 0) {
                   Text(formatDuration(item.endTime - item.startTime)).fontSize(10).fontColor('#aaa')
+                } else if (item.endTime === 0) {
+                  Text('进行中').fontSize(10).fontColor('#FF8C69')
                 }
               }
               .padding({ top: 10, bottom: 10, left: 14, right: 14 })
@@ -366,58 +418,67 @@ struct Index {
   }
 
   build() {
-    Stack() {
+    Column() {
+      // 顶部活动横幅（有活动时显示）
+      this.ActivityBanner()
+
+      // 主滚动区
       Scroll() {
         Column({ space: 16 }) {
+          // 顶部：宝宝信息 + 今日摘要
           Row() {
             Column({ space: 2 }) {
               Text('宝宝').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#333')
               Text(formatDate(this.currentTime)).fontSize(13).fontColor('#999')
             }
             Blank()
-            Row({ space: 16 }) {
+            Row({ space: 20 }) {
               Column({ space: 2 }) {
-                Text(`${this.feedCount}`).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#FF8C69')
+                Text(`${this.feedCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FF8C69')
                 Text('喂奶').fontSize(11).fontColor('#aaa')
               }
               Column({ space: 2 }) {
-                Text(this.sleepHours).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#7EC8C8')
+                Text(this.sleepHours).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#7EC8C8')
                 Text('睡眠').fontSize(11).fontColor('#aaa')
               }
               Column({ space: 2 }) {
-                Text(`${this.diaperCount}`).fontSize(18).fontWeight(FontWeight.Bold).fontColor('#FFB347')
+                Text(`${this.diaperCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFB347')
                 Text('尿布').fontSize(11).fontColor('#aaa')
               }
             }
           }
           .width('100%').padding({ left: 4, right: 4 })
 
-          this.StatusCard()
+          // 上次记录卡
+          this.LastRecordCard()
+
+          // 最近时间线
           this.RecentTimeline()
-          Blank().height(88)
+
+          // 底部留白
+          Blank().height(100)
         }
         .padding({ top: 16, left: 20, right: 20, bottom: 20 })
       }
       .scrollable(ScrollDirection.Vertical)
       .scrollBar(BarState.Off)
-      .width('100%').height('100%')
+      .layoutWeight(1)
+      .width('100%')
 
+      // 固定底部操作栏
       Column() {
-        Blank()
-        Column() {
-          this.ActionButtons()
-        }
-        .padding({ top: 12, bottom: 28 })
-        .backgroundColor('#FFF8F0')
-        .shadow({ radius: 12, color: '#1A000000', offsetX: 0, offsetY: -2 })
+        Divider().color('#F0F0F0').strokeWidth(1)
+        this.ActionButtons()
+        Blank().height(28)
       }
-      .width('100%').height('100%')
-      .hitTestBehavior(HitTestMode.Transparent)
+      .width('100%')
+      .backgroundColor('#FFFFFF')
+      .shadow({ radius: 12, color: '#1A000000', offsetX: 0, offsetY: -2 })
     }
     .width('100%').height('100%')
     .backgroundColor('#FFF8F0')
     .bindSheet(this.showFeedSheet, this.FeedSheet(), {
-      height: 280,
+      height: 300,
       dragBar: true,
       backgroundColor: '#FFF8F0',
       onDisappear: () => { this.showFeedSheet = false }
