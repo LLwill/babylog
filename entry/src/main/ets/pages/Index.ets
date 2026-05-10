@@ -135,6 +135,10 @@ struct Index {
 
   async startFeed(subType: FeedType): Promise<void> {
     doVibrate(50)
+    // 有进行中的喂奶先结束它，避免历史记录留"进行中"
+    if (this.feedActive && this.feedRecordId > 0) {
+      await updateRecord(this.feedRecordId, { endTime: Date.now() })
+    }
     const now = Date.now()
     const id = await insertRecord({
       type: RecordType.FEED, startTime: now, endTime: 0,
