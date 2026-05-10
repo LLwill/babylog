@@ -63,32 +63,47 @@ export async function initDB(context: common.UIAbilityContext): Promise<void> {
 }
 
 /**
- * 修复孤儿记录：App 被杀/手机重启后，endTime=0 的记录会永远"进行中"
- * activeIds: 当前仍在进行的记录 id 列表（从 AppStorage 恢复），这些不动
- * 其余 endTime=0 的记录一律用当前时间结束
+ * 修复孤儿记录：
+ * - 喂奶：超过 1 小时未结束，用 startTime + 1h 封底
+ * - 睡眠：恢复为当前活动（由 AppStorage activeSleep 接管），不强制结束
+ * activeIds: 当前仍在进行的记录 id（AppStorage 里有的），这些跳过
  */
 export async function fixOrphanRecords(activeIds: number[]): Promise<void> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.equalTo('end_time', 0)
-  const cursor = await store.query(predicates, ['id'])
-  const orphanIds: number[] = []
+  const cursor = await store.query(predicates, ['id', 'type', 'start_time'])
+  const MAX_FEED_MS = 60 * 60 * 1000 // 喂奶最长 1 小时
+
+  interface OrphanRow {
+    id: number
+    type: string
+    startTime: number
+  }
+  const orphans: OrphanRow[] = []
   while (cursor.goToNextRow()) {
-    const id = cursor.getLong(cursor.getColumnIndex('id'))
-    if (!activeIds.includes(id)) {
-      orphanIds.push(id)
-    }
+    orphans.push({
+      id: cursor.getLong(cursor.getColumnIndex('id')),
+      type: cursor.getString(cursor.getColumnIndex('type')),
+      startTime: cursor.getLong(cursor.getColumnIndex('start_time'))
+    })
   }
   cursor.close()
 
-  if (orphanIds.length === 0) return
+  for (const row of orphans) {
+    // 当前活动跳过（首页横幅会接管）
+    if (activeIds.includes(row.id)) continue
 
-  const now = Date.now()
-  for (const id of orphanIds) {
-    const fix: relationalStore.ValuesBucket = { 'end_time': now }
-    const p = new relationalStore.RdbPredicates(TABLE_NAME)
-    p.equalTo('id', id)
-    await store.update(fix, p)
+    if (row.type === 'FEED') {
+      // 喂奶：用 startTime + 1h 封底，不用当前时间
+      const fix: relationalStore.ValuesBucket = { 'end_time': row.startTime + MAX_FEED_MS }
+      const p = new relationalStore.RdbPredicates(TABLE_NAME)
+      p.equalTo('id', row.id)
+      await store.update(fix, p)
+    }
+    // 睡眠：不处理，让首页从 AppStorage 恢复进行中状态
+    // 如果 AppStorage 也丢了（手机重启），睡眠孤儿留着，用户回来会看到历史里有进行中的睡眠
+    // 可以在历史页点删除，后续可加"标记为已结束"功能
   }
 }
 
@@ -208,7 +223,18 @@ export async function getTodaySummary(): Promise<TodaySummary> {
   return result
 }
 
-function cursorToRecords(cursor: relationalStore.ResultSet): BabyRecord[] {
+/**
+ * 查询还在进行中的睡眠记录（endTime=0），用于手机重启后恢复 AppStorage
+ */
+export async function getOrphanSleep(): Promise<BabyRecord | null> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('type', 'SLEEP').equalTo('end_time', 0).orderByDesc('start_time').limitAs(1)
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const records = cursorToRecords(cursor)
+  return records.length > 0 ? records[0] : null
+}
   const records: BabyRecord[] = []
   while (cursor.goToNextRow()) {
     const record: BabyRecord = {

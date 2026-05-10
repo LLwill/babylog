@@ -1,8 +1,8 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
-import { initDB, fixOrphanRecords } from '../database/RecordDB';
-import { ActiveActivity } from '../model/RecordModel';
+import { initDB, fixOrphanRecords, getOrphanSleep } from '../database/RecordDB';
+import { ActiveActivity, RecordType } from '../model/RecordModel';
 
 const DOMAIN = 0x0000;
 
@@ -41,14 +41,31 @@ export default class EntryAbility extends UIAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
-    // 先初始化 DB，完成后再加载页面，保证首页拿到数据
+
     AppStorage.setOrCreate<boolean>('dbReady', false)
     initDB(this.context).then(async () => {
-      // 修复孤儿记录（App 被杀/重启后遗留的 endTime=0 记录）
+      // 1. 修复孤儿喂奶记录（超过1小时自动封底）
       const activeIds = getActiveIds()
       await fixOrphanRecords(activeIds)
+
+      // 2. 手机重启后 AppStorage 丢失：恢复进行中的睡眠记录
+      const sleepStr = AppStorage.get<string>('activeSleep')
+      if (!sleepStr) {
+        const orphanSleep = await getOrphanSleep()
+        if (orphanSleep !== null) {
+          const act: ActiveActivity = {
+            type: RecordType.SLEEP,
+            startTime: orphanSleep.startTime,
+            subType: '',
+            recordId: orphanSleep.id
+          }
+          AppStorage.setOrCreate<string>('activeSleep', JSON.stringify(act))
+          hilog.info(DOMAIN, 'testTag', 'Restored orphan sleep: id=%{public}d', orphanSleep.id)
+        }
+      }
+
       AppStorage.setOrCreate<boolean>('dbReady', true)
-      hilog.info(DOMAIN, 'testTag', 'DB initialized successfully')
+      hilog.info(DOMAIN, 'testTag', 'DB initialized')
     }).catch((err: Error) => {
       hilog.error(DOMAIN, 'testTag', 'Failed to init DB: %{public}s', JSON.stringify(err))
       AppStorage.setOrCreate<boolean>('dbReady', true)
@@ -56,10 +73,9 @@ export default class EntryAbility extends UIAbility {
 
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
-        hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));
+        hilog.error(DOMAIN, 'testTag', 'Failed to load content. Cause: %{public}s', JSON.stringify(err));
         return;
       }
-      hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
     });
   }
 
