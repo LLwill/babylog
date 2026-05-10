@@ -7,7 +7,7 @@ import {
   recordTypeIcon, feedTypeLabel, diaperTypeLabel, formatDate
 } from '../model/RecordModel'
 import {
-  insertRecord, getRecentRecords, getLastRecord,
+  insertRecord, getRecentRecords, getLastRecord, getLastCompletedRecord,
   updateRecord, getTodaySummary, TodaySummary
 } from '../database/RecordDB'
 
@@ -162,14 +162,15 @@ struct Index {
   async loadData(): Promise<void> {
     try {
       const recent = await getRecentRecords(5)
-      const lastFeed = await getLastRecord(RecordType.FEED)
+      const lastFeed = await getLastCompletedRecord(RecordType.FEED)
       const lastDiaper = await getLastRecord(RecordType.DIAPER)
-      const lastSleep = await getLastRecord(RecordType.SLEEP)
+      const lastSleep = await getLastCompletedRecord(RecordType.SLEEP)
       const summary: TodaySummary = await getTodaySummary()
       this.recentRecords = recent
-      this.lastFeedTime = lastFeed !== null ? lastFeed.startTime : 0
+      // 上次时间用已结束记录的 endTime，不用进行中记录的 startTime
+      this.lastFeedTime = lastFeed !== null ? lastFeed.endTime : 0
       this.lastDiaperTime = lastDiaper !== null ? lastDiaper.startTime : 0
-      this.lastSleepTime = lastSleep !== null ? lastSleep.startTime : 0
+      this.lastSleepTime = lastSleep !== null ? lastSleep.endTime : 0
       this.feedCount = summary.feedCount
       this.diaperCount = summary.diaperCount
       const sleepH = summary.sleepMs / 3600000
@@ -413,10 +414,15 @@ struct Index {
   @Builder
   FeedSheet() {
     Column({ space: 12 }) {
-      Text(this.feedActive ? '重新开始喂奶' : '选择喂奶方式')
-        .fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 16 })
       if (this.feedActive) {
-        Text('当前喂奶记录将结束并开始新的').fontSize(13).fontColor('#aaa')
+        Column({ space: 4 }) {
+          Text('换边 / 换方式').fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 16 })
+          Text(`当前 ${feedTypeLabel(this.feedSubType)} 已喂 ${formatDuration(this.feedSeconds * 1000)}，选择后结束并开始新记录`)
+            .fontSize(12).fontColor('#aaa').textAlign(TextAlign.Center)
+            .padding({ left: 20, right: 20 })
+        }
+      } else {
+        Text('选择喂奶方式').fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 16 })
       }
       Grid() {
         GridItem() {

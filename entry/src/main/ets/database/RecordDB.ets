@@ -176,7 +176,20 @@ export async function getRecordsByDate(dateStr: string): Promise<BabyRecord[]> {
   return cursorToRecords(cursor)
 }
 
-export async function getLastRecord(type: RecordType): Promise<BabyRecord | null> {
+export async function getLastCompletedRecord(type: RecordType): Promise<BabyRecord | null> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('type', type as string)
+    .greaterThan('end_time', 0)
+    .orderByDesc('end_time')
+    .limitAs(1)
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const records = cursorToRecords(cursor)
+  return records.length > 0 ? records[0] : null
+}
+
+
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.equalTo('type', type as string).orderByDesc('start_time').limitAs(1)
@@ -211,8 +224,13 @@ export async function getTodaySummary(): Promise<TodaySummary> {
       feedCount++
     } else if (r.type === RecordType.DIAPER as string) {
       diaperCount++
-    } else if (r.type === RecordType.SLEEP as string && r.endTime > 0) {
-      sleepMs += (r.endTime - r.startTime)
+    } else if (r.type === RecordType.SLEEP as string) {
+      if (r.endTime > 0) {
+        sleepMs += (r.endTime - r.startTime)
+      } else {
+        // 进行中的睡眠也计入今日时长
+        sleepMs += (Date.now() - r.startTime)
+      }
     }
   }
   return { feedCount, sleepMs, diaperCount }
