@@ -122,7 +122,7 @@ struct Index {
 
   async loadData(): Promise<void> {
     try {
-      const recent = await getRecentRecords(10)
+      const recent = await getRecentRecords(5)
       const lastFeed = await getLastRecord(RecordType.FEED)
       const lastDiaper = await getLastRecord(RecordType.DIAPER)
       const lastSleep = await getLastRecord(RecordType.SLEEP)
@@ -424,7 +424,13 @@ struct Index {
   @Builder
   RecentTimeline() {
     Column({ space: 0 }) {
-      Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium).padding({ left: 4, bottom: 12 })
+      Row() {
+        Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium)
+        Blank()
+        Text('全部 >').fontSize(13).fontColor('#FF8C69')
+          .onClick(() => { router.pushUrl({ url: 'pages/HistoryPage' }) })
+      }
+      .width('100%').padding({ left: 4, right: 4, bottom: 12 })
 
       if (this.recentRecords.length === 0) {
         Text('暂无记录，点击下方按钮开始记录 🌟')
@@ -432,9 +438,8 @@ struct Index {
           .width('100%').padding({ top: 20, bottom: 20 })
       } else {
         Column({ space: 0 }) {
-          ForEach(this.recentRecords.slice(0, 10), (item: BabyRecord, index: number) => {
+          ForEach(this.recentRecords, (item: BabyRecord, index: number) => {
             Row({ space: 0 }) {
-              // 左侧时间轴
               Column() {
                 Column() {
                   Text(recordTypeIcon(item.type)).fontSize(16)
@@ -447,19 +452,15 @@ struct Index {
                 .alignItems(HorizontalAlign.Center)
                 .shadow({ radius: 4, color: '#0F000000', offsetX: 0, offsetY: 1 })
 
-                // 竖线：固定高度，最后一条不画
-                if (index < Math.min(this.recentRecords.length, 10) - 1) {
+                if (index < this.recentRecords.length - 1) {
                   Column()
-                    .width(2)
-                    .height(24)
+                    .width(2).height(24)
                     .backgroundColor('#E8E8E8')
                     .margin({ top: 2 })
                 }
               }
-              .width(36)
-              .alignItems(HorizontalAlign.Center)
+              .width(36).alignItems(HorizontalAlign.Center)
 
-              // 右侧内容
               Column({ space: 2 }) {
                 Row() {
                   Text(this.timelineTitle(item))
@@ -479,8 +480,7 @@ struct Index {
               .padding({ left: 12, top: 4, bottom: 8 })
               .alignItems(HorizontalAlign.Start)
             }
-            .width('100%')
-            .alignItems(VerticalAlign.Top)
+            .width('100%').alignItems(VerticalAlign.Top)
           })
         }
         .padding({ left: 4 })
