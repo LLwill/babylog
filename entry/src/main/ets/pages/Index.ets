@@ -1,6 +1,5 @@
 import router from '@ohos.router'
 import vibrator from '@ohos.vibrator'
-import promptAction from '@ohos.promptAction'
 import {
   RecordType, FeedType, TempSite,
   BabyRecord, ActiveActivity,
@@ -51,6 +50,8 @@ struct Index {
   @State diaperCount: number = 0
   @State showFeedSheet: boolean = false
   @State showTempSheet: boolean = false
+  @State showSheet: boolean = false   // 统一 Sheet 开关
+  @State sheetMode: string = 'feed'   // 'feed' | 'temp'
   @State tempValue: number = 37.0
   @State tempSite: TempSite = TempSite.AXILLA
   @State currentTime: number = Date.now()
@@ -204,7 +205,7 @@ struct Index {
     this.feedRecordId = id
     this.feedSeconds = 0
     this.feedBannerExpanded = false
-    this.showFeedSheet = false
+    this.showSheet = false
   }
 
   async endFeed(): Promise<void> {
@@ -261,23 +262,15 @@ struct Index {
       imageUri: '',
       amount: this.tempValue
     })
-    this.showTempSheet = false
+    this.showSheet = false
     this.tempValue = 37.0
     this.tempSite = TempSite.AXILLA
     await this.loadData()
   }
 
   showMoreMenu(): void {
-    promptAction.showActionMenu({
-      title: '',
-      buttons: [
-        { text: '🌡️ 记录体温', color: '#333333' }
-      ]
-    }).then((result) => {
-      if (result.index === 0) {
-        this.showTempSheet = true
-      }
-    })
+    this.sheetMode = 'temp'
+    this.showSheet = true
   }
 
   // 喂奶横幅
@@ -403,7 +396,7 @@ struct Index {
     Row({ space: 10 }) {
       Column({ space: 4 }) {
         Button('🍼')
-          .onClick(() => { this.showFeedSheet = true })
+          .onClick(() => { this.sheetMode = "feed"; this.showSheet = true })
           .backgroundColor(this.feedActive ? '#FF8C69' : '#FFF0E8')
           .fontColor(this.feedActive ? Color.White : '#FF8C69')
           .fontSize(24).width(64).height(64).borderRadius(32)
@@ -444,6 +437,15 @@ struct Index {
     }
     .width('100%')
     .padding({ left: 24, right: 24 })
+  }
+
+  @Builder
+  SheetContent() {
+    if (this.sheetMode === 'feed') {
+      this.FeedSheet()
+    } else {
+      this.TempSheet()
+    }
   }
 
   @Builder
@@ -647,7 +649,7 @@ struct Index {
         Text('🌡️ 记体温')
           .fontSize(13).fontColor('#FF8C69')
           .padding({ top: 12, bottom: 4 })
-          .onClick(() => { this.showTempSheet = true })
+          .onClick(() => { this.sheetMode = "temp"; this.showSheet = true })
       }
       .width('100%').justifyContent(FlexAlign.Center)
     }
@@ -742,20 +744,16 @@ struct Index {
       .shadow({ radius: 12, color: '#1A000000', offsetX: 0, offsetY: -2 })
     }
     .width('100%').height('100%').backgroundColor('#FFF8F0')
-    .bindSheet(this.showFeedSheet, this.FeedSheet(), {
-      height: 320,
-      dragBar: true,
-      backgroundColor: '#FFF8F0',
-      onDisappear: () => { this.showFeedSheet = false }
-    })
-    .bindSheet(this.showTempSheet, this.TempSheet(), {
-      height: 460,
+    .bindSheet(this.showSheet, this.SheetContent(), {
+      height: this.sheetMode === 'temp' ? 480 : 320,
       dragBar: true,
       backgroundColor: '#FFF8F0',
       onDisappear: () => {
-        this.showTempSheet = false
-        this.tempValue = 37.0
-        this.tempSite = TempSite.AXILLA
+        this.showSheet = false
+        if (this.sheetMode === 'temp') {
+          this.tempValue = 37.0
+          this.tempSite = TempSite.AXILLA
+        }
       }
     })
   }
