@@ -436,7 +436,6 @@ struct Index {
             Row({ space: 0 }) {
               // 左侧时间轴
               Column() {
-                // 图标圆点
                 Column() {
                   Text(recordTypeIcon(item.type)).fontSize(16)
                 }
@@ -448,13 +447,13 @@ struct Index {
                 .alignItems(HorizontalAlign.Center)
                 .shadow({ radius: 4, color: '#0F000000', offsetX: 0, offsetY: 1 })
 
-                // 竖线（最后一条不画）
-                if (index < this.recentRecords.slice(0, 10).length - 1) {
+                // 竖线：固定高度，最后一条不画
+                if (index < Math.min(this.recentRecords.length, 10) - 1) {
                   Column()
                     .width(2)
-                    .layoutWeight(1)
+                    .height(24)
                     .backgroundColor('#E8E8E8')
-                    .margin({ top: 2, bottom: 2 })
+                    .margin({ top: 2 })
                 }
               }
               .width(36)
@@ -477,7 +476,7 @@ struct Index {
                 }
               }
               .layoutWeight(1)
-              .padding({ left: 12, top: 4, bottom: index < this.recentRecords.slice(0, 10).length - 1 ? 20 : 4 })
+              .padding({ left: 12, top: 4, bottom: 8 })
               .alignItems(HorizontalAlign.Start)
             }
             .width('100%')
