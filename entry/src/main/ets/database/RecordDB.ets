@@ -18,7 +18,6 @@ const SQL_CREATE_TABLE = `
   )
 `
 
-// 新增记录时不需要 id 字段，用这个 interface 代替 Omit<BabyRecord, 'id'>
 export interface NewRecord {
   type: RecordType
   startTime: number
@@ -29,7 +28,6 @@ export interface NewRecord {
   amount: number
 }
 
-// 更新记录时的可选字段
 export interface UpdateFields {
   endTime?: number
   note?: string
@@ -37,18 +35,22 @@ export interface UpdateFields {
   imageUri?: string
 }
 
-// getTodaySummary 的返回类型
 export interface TodaySummary {
   feedCount: number
   sleepMs: number
   diaperCount: number
 }
 
-// cursor 临时行类型
 interface CursorRow {
   type: string
   startTime: number
   endTime: number
+}
+
+interface OrphanRow {
+  id: number
+  type: string
+  startTime: number
 }
 
 let rdbStore: relationalStore.RdbStore | null = null
@@ -65,46 +67,49 @@ export async function initDB(context: common.UIAbilityContext): Promise<void> {
 /**
  * 修复孤儿记录：
  * - 喂奶：超过 1 小时未结束，用 startTime + 1h 封底
- * - 睡眠：恢复为当前活动（由 AppStorage activeSleep 接管），不强制结束
- * activeIds: 当前仍在进行的记录 id（AppStorage 里有的），这些跳过
+ * - 睡眠：不强制结束，由 EntryAbility 恢复到 AppStorage
  */
 export async function fixOrphanRecords(activeIds: number[]): Promise<void> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.equalTo('end_time', 0)
   const cursor = await store.query(predicates, ['id', 'type', 'start_time'])
-  const MAX_FEED_MS = 60 * 60 * 1000 // 喂奶最长 1 小时
+  const MAX_FEED_MS = 60 * 60 * 1000
 
-  interface OrphanRow {
-    id: number
-    type: string
-    startTime: number
-  }
   const orphans: OrphanRow[] = []
   while (cursor.goToNextRow()) {
-    orphans.push({
+    const row: OrphanRow = {
       id: cursor.getLong(cursor.getColumnIndex('id')),
       type: cursor.getString(cursor.getColumnIndex('type')),
       startTime: cursor.getLong(cursor.getColumnIndex('start_time'))
-    })
+    }
+    orphans.push(row)
   }
   cursor.close()
 
   for (const row of orphans) {
-    // 当前活动跳过（首页横幅会接管）
     if (activeIds.includes(row.id)) continue
-
     if (row.type === 'FEED') {
-      // 喂奶：用 startTime + 1h 封底，不用当前时间
       const fix: relationalStore.ValuesBucket = { 'end_time': row.startTime + MAX_FEED_MS }
       const p = new relationalStore.RdbPredicates(TABLE_NAME)
       p.equalTo('id', row.id)
       await store.update(fix, p)
     }
-    // 睡眠：不处理，让首页从 AppStorage 恢复进行中状态
-    // 如果 AppStorage 也丢了（手机重启），睡眠孤儿留着，用户回来会看到历史里有进行中的睡眠
-    // 可以在历史页点删除，后续可加"标记为已结束"功能
+    // SLEEP 不处理，由 EntryAbility.getOrphanSleep 恢复
   }
+}
+
+/**
+ * 查询进行中的睡眠记录，用于手机重启后恢复 AppStorage
+ */
+export async function getOrphanSleep(): Promise<BabyRecord | null> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('type', 'SLEEP').equalTo('end_time', 0).orderByDesc('start_time').limitAs(1)
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const records = cursorToRecords(cursor)
+  return records.length > 0 ? records[0] : null
 }
 
 function getStore(): relationalStore.RdbStore {
@@ -125,25 +130,16 @@ export async function insertRecord(record: NewRecord): Promise<number> {
     'image_uri': record.imageUri,
     'amount': record.amount
   }
-  const rowId = await store.insert(TABLE_NAME, valueBucket)
-  return rowId
+  return await store.insert(TABLE_NAME, valueBucket)
 }
 
 export async function updateRecord(id: number, fields: UpdateFields): Promise<void> {
   const store = getStore()
   const valueBucket: relationalStore.ValuesBucket = {}
-  if (fields.endTime !== undefined) {
-    valueBucket['end_time'] = fields.endTime
-  }
-  if (fields.note !== undefined) {
-    valueBucket['note'] = fields.note
-  }
-  if (fields.amount !== undefined) {
-    valueBucket['amount'] = fields.amount
-  }
-  if (fields.imageUri !== undefined) {
-    valueBucket['image_uri'] = fields.imageUri
-  }
+  if (fields.endTime !== undefined) valueBucket['end_time'] = fields.endTime
+  if (fields.note !== undefined) valueBucket['note'] = fields.note
+  if (fields.amount !== undefined) valueBucket['amount'] = fields.amount
+  if (fields.imageUri !== undefined) valueBucket['image_uri'] = fields.imageUri
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
   predicates.equalTo('id', id)
   await store.update(valueBucket, predicates)
@@ -219,22 +215,10 @@ export async function getTodaySummary(): Promise<TodaySummary> {
       sleepMs += (r.endTime - r.startTime)
     }
   }
-  const result: TodaySummary = { feedCount, sleepMs, diaperCount }
-  return result
+  return { feedCount, sleepMs, diaperCount }
 }
 
-/**
- * 查询还在进行中的睡眠记录（endTime=0），用于手机重启后恢复 AppStorage
- */
-export async function getOrphanSleep(): Promise<BabyRecord | null> {
-  const store = getStore()
-  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
-  predicates.equalTo('type', 'SLEEP').equalTo('end_time', 0).orderByDesc('start_time').limitAs(1)
-  const cursor = await store.query(predicates,
-    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
-  const records = cursorToRecords(cursor)
-  return records.length > 0 ? records[0] : null
-}
+function cursorToRecords(cursor: relationalStore.ResultSet): BabyRecord[] {
   const records: BabyRecord[] = []
   while (cursor.goToNextRow()) {
     const record: BabyRecord = {
