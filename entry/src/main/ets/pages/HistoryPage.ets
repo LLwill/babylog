@@ -192,7 +192,7 @@ struct HistoryPage {
               }
               .swipeAction({
                 end: {
-                  builder: this.DeleteButton.bind(this, record.id)
+                  builder: () => { this.DeleteButton(record.id) }
                 }
               })
             }, (record: BabyRecord) => record.id.toString())

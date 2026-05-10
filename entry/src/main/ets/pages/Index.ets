@@ -16,7 +16,7 @@ function doVibrate(duration: number): void {
     const effect: vibrator.VibrateTime = { type: 'time', duration: duration }
     const attr: vibrator.VibrateAttribute = { id: 0, usage: 'touch' }
     vibrator.startVibration(effect, attr)
-  } catch (_e: Error) {}
+  } catch {}
 }
 
 @Entry
@@ -92,7 +92,7 @@ struct Index {
         this.feedStartTime = act.startTime
         this.feedSubType = act.subType
         this.feedRecordId = act.recordId
-      } catch (_e: Error) {}
+      } catch {}
     }
     this.loadData()
   }
@@ -110,7 +110,7 @@ struct Index {
         this.sleepActive = true
         this.sleepStartTime = act.startTime
         this.sleepRecordId = act.recordId
-      } catch (_e: Error) {}
+      } catch {}
     }
     this.loadData()
   }
@@ -130,7 +130,7 @@ struct Index {
         this.feedSubType = act.subType
         this.feedRecordId = act.recordId
         this.feedSeconds = Math.floor((Date.now() - act.startTime) / 1000)
-      } catch (_e: Error) {
+      } catch {
         this.activeFeed = ''
       }
     }
@@ -141,7 +141,7 @@ struct Index {
         this.sleepStartTime = act.startTime
         this.sleepRecordId = act.recordId
         this.sleepSeconds = Math.floor((Date.now() - act.startTime) / 1000)
-      } catch (_e: Error) {
+      } catch {
         this.activeSleep = ''
       }
     }
