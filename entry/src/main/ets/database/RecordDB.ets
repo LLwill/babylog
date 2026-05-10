@@ -55,6 +55,32 @@ interface OrphanRow {
 
 let rdbStore: relationalStore.RdbStore | null = null
 
+function getStore(): relationalStore.RdbStore {
+  if (!rdbStore) {
+    throw new Error('DB not initialized')
+  }
+  return rdbStore
+}
+
+function cursorToRecords(cursor: relationalStore.ResultSet): BabyRecord[] {
+  const records: BabyRecord[] = []
+  while (cursor.goToNextRow()) {
+    const record: BabyRecord = {
+      id: cursor.getLong(cursor.getColumnIndex('id')),
+      type: cursor.getString(cursor.getColumnIndex('type')) as RecordType,
+      startTime: cursor.getLong(cursor.getColumnIndex('start_time')),
+      endTime: cursor.getLong(cursor.getColumnIndex('end_time')),
+      subType: cursor.getString(cursor.getColumnIndex('sub_type')),
+      note: cursor.getString(cursor.getColumnIndex('note')),
+      imageUri: cursor.getString(cursor.getColumnIndex('image_uri')),
+      amount: cursor.getDouble(cursor.getColumnIndex('amount'))
+    }
+    records.push(record)
+  }
+  cursor.close()
+  return records
+}
+
 export async function initDB(context: common.UIAbilityContext): Promise<void> {
   const config: relationalStore.StoreConfig = {
     name: DB_NAME,
@@ -64,11 +90,6 @@ export async function initDB(context: common.UIAbilityContext): Promise<void> {
   await rdbStore.executeSql(SQL_CREATE_TABLE)
 }
 
-/**
- * 修复孤儿记录：
- * - 喂奶：超过 1 小时未结束，用 startTime + 1h 封底
- * - 睡眠：不强制结束，由 EntryAbility 恢复到 AppStorage
- */
 export async function fixOrphanRecords(activeIds: number[]): Promise<void> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
@@ -95,13 +116,9 @@ export async function fixOrphanRecords(activeIds: number[]): Promise<void> {
       p.equalTo('id', row.id)
       await store.update(fix, p)
     }
-    // SLEEP 不处理，由 EntryAbility.getOrphanSleep 恢复
   }
 }
 
-/**
- * 查询进行中的睡眠记录，用于手机重启后恢复 AppStorage
- */
 export async function getOrphanSleep(): Promise<BabyRecord | null> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
@@ -110,13 +127,6 @@ export async function getOrphanSleep(): Promise<BabyRecord | null> {
     ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
   const records = cursorToRecords(cursor)
   return records.length > 0 ? records[0] : null
-}
-
-function getStore(): relationalStore.RdbStore {
-  if (!rdbStore) {
-    throw new Error('DB not initialized')
-  }
-  return rdbStore
 }
 
 export async function insertRecord(record: NewRecord): Promise<number> {
@@ -176,6 +186,18 @@ export async function getRecordsByDate(dateStr: string): Promise<BabyRecord[]> {
   return cursorToRecords(cursor)
 }
 
+// 取最近一条任意状态的记录（含进行中）
+export async function getLastRecord(type: RecordType): Promise<BabyRecord | null> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('type', type as string).orderByDesc('start_time').limitAs(1)
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const records = cursorToRecords(cursor)
+  return records.length > 0 ? records[0] : null
+}
+
+// 取最近一条已结束的记录，用于"上次喂奶/入睡多久前"
 export async function getLastCompletedRecord(type: RecordType): Promise<BabyRecord | null> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
@@ -183,16 +205,6 @@ export async function getLastCompletedRecord(type: RecordType): Promise<BabyReco
     .greaterThan('end_time', 0)
     .orderByDesc('end_time')
     .limitAs(1)
-  const cursor = await store.query(predicates,
-    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
-  const records = cursorToRecords(cursor)
-  return records.length > 0 ? records[0] : null
-}
-
-
-  const store = getStore()
-  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
-  predicates.equalTo('type', type as string).orderByDesc('start_time').limitAs(1)
   const cursor = await store.query(predicates,
     ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
   const records = cursorToRecords(cursor)
@@ -228,29 +240,9 @@ export async function getTodaySummary(): Promise<TodaySummary> {
       if (r.endTime > 0) {
         sleepMs += (r.endTime - r.startTime)
       } else {
-        // 进行中的睡眠也计入今日时长
         sleepMs += (Date.now() - r.startTime)
       }
     }
   }
   return { feedCount, sleepMs, diaperCount }
-}
-
-function cursorToRecords(cursor: relationalStore.ResultSet): BabyRecord[] {
-  const records: BabyRecord[] = []
-  while (cursor.goToNextRow()) {
-    const record: BabyRecord = {
-      id: cursor.getLong(cursor.getColumnIndex('id')),
-      type: cursor.getString(cursor.getColumnIndex('type')) as RecordType,
-      startTime: cursor.getLong(cursor.getColumnIndex('start_time')),
-      endTime: cursor.getLong(cursor.getColumnIndex('end_time')),
-      subType: cursor.getString(cursor.getColumnIndex('sub_type')),
-      note: cursor.getString(cursor.getColumnIndex('note')),
-      imageUri: cursor.getString(cursor.getColumnIndex('image_uri')),
-      amount: cursor.getDouble(cursor.getColumnIndex('amount'))
-    }
-    records.push(record)
-  }
-  cursor.close()
-  return records
 }
