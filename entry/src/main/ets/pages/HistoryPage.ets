@@ -80,19 +80,23 @@ struct HistoryPage {
   async handleFinish(id: number): Promise<void> {
     try {
       await updateRecord(id, { endTime: Date.now() })
-      // 同步清掉 AppStorage，避免首页横幅还在显示
+      // 清掉 AppStorage，@Watch 会触发首页横幅消失
       const feedStr = AppStorage.get<string>('activeFeed')
       const sleepStr = AppStorage.get<string>('activeSleep')
       if (feedStr) {
         try {
           const act = JSON.parse(feedStr) as ActiveActivity
-          if (act.recordId === id) AppStorage.setOrCreate<string>('activeFeed', '')
+          if (act.recordId === id) {
+            AppStorage.setOrCreate<string>('activeFeed', '')
+          }
         } catch {}
       }
       if (sleepStr) {
         try {
           const act = JSON.parse(sleepStr) as ActiveActivity
-          if (act.recordId === id) AppStorage.setOrCreate<string>('activeSleep', '')
+          if (act.recordId === id) {
+            AppStorage.setOrCreate<string>('activeSleep', '')
+          }
         } catch {}
       }
       await this.loadRecords()

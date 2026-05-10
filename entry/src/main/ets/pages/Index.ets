@@ -23,8 +23,8 @@ function doVibrate(duration: number): void {
 @Component
 struct Index {
   // 喂奶和睡眠分开存，互不干扰
-  @StorageLink('activeFeed') activeFeed: string = ''
-  @StorageLink('activeSleep') activeSleep: string = ''
+  @StorageLink('activeFeed') @Watch('onActiveFeedChange') activeFeed: string = ''
+  @StorageLink('activeSleep') @Watch('onActiveSleepChange') activeSleep: string = ''
   @StorageLink('dbReady') @Watch('onDbReady') dbReady: boolean = false
 
   // 喂奶状态
@@ -74,6 +74,45 @@ struct Index {
     if (this.dbReady) {
       this.loadData()
     }
+  }
+
+  // 外部（历史页）修改 AppStorage 时同步更新首页状态
+  onActiveFeedChange(): void {
+    if (!this.activeFeed) {
+      this.feedActive = false
+      this.feedStartTime = 0
+      this.feedSubType = ''
+      this.feedRecordId = 0
+      this.feedSeconds = 0
+      this.feedBannerExpanded = false
+    } else {
+      try {
+        const act: ActiveActivity = JSON.parse(this.activeFeed) as ActiveActivity
+        this.feedActive = true
+        this.feedStartTime = act.startTime
+        this.feedSubType = act.subType
+        this.feedRecordId = act.recordId
+      } catch {}
+    }
+    this.loadData()
+  }
+
+  onActiveSleepChange(): void {
+    if (!this.activeSleep) {
+      this.sleepActive = false
+      this.sleepStartTime = 0
+      this.sleepRecordId = 0
+      this.sleepSeconds = 0
+      this.sleepBannerExpanded = false
+    } else {
+      try {
+        const act: ActiveActivity = JSON.parse(this.activeSleep) as ActiveActivity
+        this.sleepActive = true
+        this.sleepStartTime = act.startTime
+        this.sleepRecordId = act.recordId
+      } catch {}
+    }
+    this.loadData()
   }
 
   aboutToDisappear(): void {
@@ -457,14 +496,27 @@ struct Index {
                   Text(this.timelineTitle(item))
                     .fontSize(14).fontWeight(FontWeight.Medium).fontColor('#333')
                   Blank()
-                  Text(formatTimeAgo(item.startTime))
-                    .fontSize(12).fontColor('#bbb')
+                  if (item.endTime === 0) {
+                    // 进行中：点击展开对应横幅
+                    Text('去结束 >')
+                      .fontSize(12).fontColor('#FF8C69')
+                      .onClick(() => {
+                        if (item.type === RecordType.FEED) {
+                          this.feedBannerExpanded = true
+                        } else if (item.type === RecordType.SLEEP) {
+                          this.sleepBannerExpanded = true
+                        }
+                      })
+                  } else {
+                    Text(formatTimeAgo(item.startTime))
+                      .fontSize(12).fontColor('#bbb')
+                  }
                 }
                 .width('100%')
 
                 if (this.timelineDetail(item)) {
                   Text(this.timelineDetail(item))
-                    .fontSize(12).fontColor('#999')
+                    .fontSize(12).fontColor(item.endTime === 0 ? '#FF8C69' : '#999')
                 }
               }
               .layoutWeight(1)
