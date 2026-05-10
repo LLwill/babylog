@@ -366,18 +366,9 @@ struct Index {
           .fontWeight(this.sleepActive ? FontWeight.Bold : FontWeight.Normal)
       }
       .layoutWeight(1).alignItems(HorizontalAlign.Center)
-
-      Column({ space: 4 }) {
-        Button('📋')
-          .onClick(() => { router.pushUrl({ url: 'pages/HistoryPage' }) })
-          .backgroundColor('#F0F0F0').fontColor('#999')
-          .fontSize(24).width(64).height(64).borderRadius(32)
-        Text('历史').fontSize(12).fontColor('#666')
-      }
-      .layoutWeight(1).alignItems(HorizontalAlign.Center)
     }
     .width('100%')
-    .padding({ left: 12, right: 12 })
+    .padding({ left: 24, right: 24 })
   }
 
   @Builder
