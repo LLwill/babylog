@@ -13,10 +13,6 @@ export default class EntryAbility extends UIAbility {
       hilog.error(DOMAIN, 'testTag', 'Failed to set colorMode. Cause: %{public}s', JSON.stringify(err));
     }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
-    // 初始化数据库
-    initDB(this.context).catch((err: Error) => {
-      hilog.error(DOMAIN, 'testTag', 'Failed to init DB: %{public}s', JSON.stringify(err));
-    });
   }
 
   onDestroy(): void {
@@ -25,6 +21,17 @@ export default class EntryAbility extends UIAbility {
 
   onWindowStageCreate(windowStage: window.WindowStage): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onWindowStageCreate');
+    // 先初始化 DB，完成后再加载页面，保证首页拿到数据
+    AppStorage.setOrCreate<boolean>('dbReady', false)
+    initDB(this.context).then(() => {
+      AppStorage.setOrCreate<boolean>('dbReady', true)
+      hilog.info(DOMAIN, 'testTag', 'DB initialized successfully')
+    }).catch((err: Error) => {
+      hilog.error(DOMAIN, 'testTag', 'Failed to init DB: %{public}s', JSON.stringify(err))
+      // DB 失败也要标记，避免首页一直等
+      AppStorage.setOrCreate<boolean>('dbReady', true)
+    })
+
     windowStage.loadContent('pages/Index', (err) => {
       if (err.code) {
         hilog.error(DOMAIN, 'testTag', 'Failed to load the content. Cause: %{public}s', JSON.stringify(err));

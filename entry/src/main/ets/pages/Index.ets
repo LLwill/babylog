@@ -25,6 +25,7 @@ struct Index {
   // 喂奶和睡眠分开存，互不干扰
   @StorageLink('activeFeed') activeFeed: string = ''
   @StorageLink('activeSleep') activeSleep: string = ''
+  @StorageLink('dbReady') @Watch('onDbReady') dbReady: boolean = false
 
   // 喂奶状态
   @State feedActive: boolean = false
@@ -55,8 +56,17 @@ struct Index {
 
   aboutToAppear(): void {
     this.restoreActivities()
-    this.loadData()
     this.startClock()
+    if (this.dbReady) {
+      this.loadData()
+    }
+    // 否则等 @Watch('onDbReady') 触发
+  }
+
+  onDbReady(): void {
+    if (this.dbReady) {
+      this.loadData()
+    }
   }
 
   aboutToDisappear(): void {
