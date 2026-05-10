@@ -62,6 +62,36 @@ export async function initDB(context: common.UIAbilityContext): Promise<void> {
   await rdbStore.executeSql(SQL_CREATE_TABLE)
 }
 
+/**
+ * 修复孤儿记录：App 被杀/手机重启后，endTime=0 的记录会永远"进行中"
+ * activeIds: 当前仍在进行的记录 id 列表（从 AppStorage 恢复），这些不动
+ * 其余 endTime=0 的记录一律用当前时间结束
+ */
+export async function fixOrphanRecords(activeIds: number[]): Promise<void> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('end_time', 0)
+  const cursor = await store.query(predicates, ['id'])
+  const orphanIds: number[] = []
+  while (cursor.goToNextRow()) {
+    const id = cursor.getLong(cursor.getColumnIndex('id'))
+    if (!activeIds.includes(id)) {
+      orphanIds.push(id)
+    }
+  }
+  cursor.close()
+
+  if (orphanIds.length === 0) return
+
+  const now = Date.now()
+  for (const id of orphanIds) {
+    const fix: relationalStore.ValuesBucket = { 'end_time': now }
+    const p = new relationalStore.RdbPredicates(TABLE_NAME)
+    p.equalTo('id', id)
+    await store.update(fix, p)
+  }
+}
+
 function getStore(): relationalStore.RdbStore {
   if (!rdbStore) {
     throw new Error('DB not initialized')
