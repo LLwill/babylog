@@ -1,7 +1,7 @@
 import router from '@ohos.router'
 import {
   BabyRecord, RecordType,
-  formatTime, formatDate, formatDuration,
+  formatTime, formatDuration,
   recordTypeIcon, recordTypeLabel, feedTypeLabel, diaperTypeLabel
 } from '../model/RecordModel'
 import { getRecordsByDate, deleteRecord } from '../database/RecordDB'
@@ -15,8 +15,8 @@ interface DateGroup {
 @Component
 struct HistoryPage {
   @State groups: DateGroup[] = []
-  @State selectedDate: string = this.todayStr()
   @State loading: boolean = false
+  @State deleteTargetId: number = -1
 
   aboutToAppear(): void {
     this.loadRecords()
@@ -30,7 +30,6 @@ struct HistoryPage {
   async loadRecords(): Promise<void> {
     this.loading = true
     try {
-      // 加载最近7天
       const result: DateGroup[] = []
       for (let i = 0; i < 7; i++) {
         const d = new Date()
@@ -64,39 +63,76 @@ struct HistoryPage {
       const color = record.note ? ` · ${record.note}` : ''
       return `${diaperTypeLabel(record.subType)}${color}`
     } else if (record.type === RecordType.SLEEP) {
-      const dur = record.endTime > 0 ? formatDuration(record.endTime - record.startTime) : '进行中'
-      return dur
+      return record.endTime > 0 ? formatDuration(record.endTime - record.startTime) : '进行中'
     }
     return ''
   }
 
-  async handleDelete(groupIdx: number, recordIdx: number): Promise<void> {
-    const group = this.groups[groupIdx]
-    const record = group.records[recordIdx]
+  async handleDelete(id: number): Promise<void> {
     try {
-      await deleteRecord(record.id)
-      const newRecords = group.records.filter((_, i) => i !== recordIdx)
-      const newGroups = this.groups.map((g, i) => i === groupIdx ? { date: g.date, records: newRecords } : g)
-      this.groups = newGroups.filter(g => g.records.length > 0 || g.date === this.todayStr())
+      await deleteRecord(id)
+      // 重新加载
+      await this.loadRecords()
     } catch (e) {
       console.error('delete error', JSON.stringify(e))
     }
   }
 
+  // swipeAction builder 必须是 @Builder 方法，不能用内联箭头函数
+  @Builder
+  DeleteButton(id: number) {
+    Button('删除')
+      .backgroundColor('#FF4444')
+      .fontColor(Color.White)
+      .fontSize(14)
+      .height('100%')
+      .width(80)
+      .onClick(() => { this.handleDelete(id) })
+  }
+
+  @Builder
+  RecordItem(record: BabyRecord) {
+    Row({ space: 12 }) {
+      Column() {
+        Text(recordTypeIcon(record.type)).fontSize(24)
+      }
+      .width(44)
+      .height(44)
+      .backgroundColor('#FFF0E8')
+      .borderRadius(22)
+      .justifyContent(FlexAlign.Center)
+      .alignItems(HorizontalAlign.Center)
+
+      Column({ space: 2 }) {
+        Text(recordTypeLabel(record.type))
+          .fontSize(15)
+          .fontWeight(FontWeight.Medium)
+          .fontColor('#333')
+        Text(this.recordSummary(record))
+          .fontSize(13)
+          .fontColor('#888')
+      }
+      .alignItems(HorizontalAlign.Start)
+      .layoutWeight(1)
+
+      Text(formatTime(record.startTime))
+        .fontSize(13)
+        .fontColor('#aaa')
+    }
+    .padding({ left: 20, right: 20, top: 14, bottom: 14 })
+    .width('100%')
+    .backgroundColor('#FFFFFF')
+  }
+
   build() {
     Column() {
-      // 顶部导航
       Row() {
         Text('←')
-          .fontSize(24)
-          .fontColor('#333')
-          .padding(12)
+          .fontSize(24).fontColor('#333').padding(12)
           .onClick(() => { router.back() })
         Blank()
         Text('历史记录')
-          .fontSize(18)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#333')
+          .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#333')
         Blank()
         Text('  ').padding(12)
       }
@@ -113,75 +149,30 @@ struct HistoryPage {
         .justifyContent(FlexAlign.Center)
       } else {
         List({ space: 0 }) {
-          ForEach(this.groups, (group: DateGroup, groupIdx: number) => {
-            // 日期分组标题
+          ForEach(this.groups, (group: DateGroup) => {
             ListItem() {
               Text(this.formatGroupDate(group.date))
-                .fontSize(13)
-                .fontColor('#999')
-                .fontWeight(FontWeight.Medium)
+                .fontSize(13).fontColor('#999').fontWeight(FontWeight.Medium)
                 .padding({ left: 20, top: 16, bottom: 8 })
                 .width('100%')
                 .backgroundColor('#FFF8F0')
             }
 
-            // 当日记录
-            ForEach(group.records, (record: BabyRecord, recordIdx: number) => {
+            ForEach(group.records, (record: BabyRecord) => {
               ListItem() {
-                Row({ space: 12 }) {
-                  // 左侧图标
-                  Column() {
-                    Text(recordTypeIcon(record.type)).fontSize(24)
-                  }
-                  .width(44)
-                  .height(44)
-                  .backgroundColor('#FFF0E8')
-                  .borderRadius(22)
-                  .justifyContent(FlexAlign.Center)
-                  .alignItems(HorizontalAlign.Center)
-
-                  // 中间内容
-                  Column({ space: 2 }) {
-                    Text(recordTypeLabel(record.type))
-                      .fontSize(15)
-                      .fontWeight(FontWeight.Medium)
-                      .fontColor('#333')
-                    Text(this.recordSummary(record))
-                      .fontSize(13)
-                      .fontColor('#888')
-                  }
-                  .alignItems(HorizontalAlign.Start)
-                  .layoutWeight(1)
-
-                  // 右侧时间
-                  Text(formatTime(record.startTime))
-                    .fontSize(13)
-                    .fontColor('#aaa')
-                }
-                .padding({ left: 20, right: 20, top: 14, bottom: 14 })
-                .width('100%')
-                .backgroundColor('#FFFFFF')
+                this.RecordItem(record)
               }
               .swipeAction({
                 end: {
-                  builder: () => {
-                    Button('删除')
-                      .backgroundColor('#FF4444')
-                      .fontColor(Color.White)
-                      .fontSize(14)
-                      .height('100%')
-                      .width(80)
-                      .onClick(() => { this.handleDelete(groupIdx, recordIdx) })
-                  }
+                  builder: this.DeleteButton.bind(this, record.id)
                 }
               })
-            })
+            }, (record: BabyRecord) => record.id.toString())
 
-            // 分组间隔
             ListItem() {
               Divider().color('#F0F0F0').strokeWidth(8)
             }
-          })
+          }, (group: DateGroup) => group.date)
         }
         .layoutWeight(1)
         .backgroundColor('#FFF8F0')
