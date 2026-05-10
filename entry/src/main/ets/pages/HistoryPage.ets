@@ -1,10 +1,10 @@
 import router from '@ohos.router'
 import {
-  BabyRecord, RecordType,
+  BabyRecord, RecordType, ActiveActivity,
   formatTime, formatDuration,
   recordTypeIcon, recordTypeLabel, feedTypeLabel, diaperTypeLabel
 } from '../model/RecordModel'
-import { getRecordsByDate, deleteRecord } from '../database/RecordDB'
+import { getRecordsByDate, deleteRecord, updateRecord } from '../database/RecordDB'
 
 interface DateGroup {
   date: string
@@ -71,10 +71,33 @@ struct HistoryPage {
   async handleDelete(id: number): Promise<void> {
     try {
       await deleteRecord(id)
-      // 重新加载
       await this.loadRecords()
     } catch (e) {
       console.error('delete error', JSON.stringify(e))
+    }
+  }
+
+  async handleFinish(id: number): Promise<void> {
+    try {
+      await updateRecord(id, { endTime: Date.now() })
+      // 同步清掉 AppStorage，避免首页横幅还在显示
+      const feedStr = AppStorage.get<string>('activeFeed')
+      const sleepStr = AppStorage.get<string>('activeSleep')
+      if (feedStr) {
+        try {
+          const act = JSON.parse(feedStr) as ActiveActivity
+          if (act.recordId === id) AppStorage.setOrCreate<string>('activeFeed', '')
+        } catch {}
+      }
+      if (sleepStr) {
+        try {
+          const act = JSON.parse(sleepStr) as ActiveActivity
+          if (act.recordId === id) AppStorage.setOrCreate<string>('activeSleep', '')
+        } catch {}
+      }
+      await this.loadRecords()
+    } catch (e) {
+      console.error('finish error', JSON.stringify(e))
     }
   }
 
@@ -96,32 +119,33 @@ struct HistoryPage {
       Column() {
         Text(recordTypeIcon(record.type)).fontSize(24)
       }
-      .width(44)
-      .height(44)
-      .backgroundColor('#FFF0E8')
-      .borderRadius(22)
-      .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center)
+      .width(44).height(44)
+      .backgroundColor('#FFF0E8').borderRadius(22)
+      .justifyContent(FlexAlign.Center).alignItems(HorizontalAlign.Center)
 
       Column({ space: 2 }) {
         Text(recordTypeLabel(record.type))
-          .fontSize(15)
-          .fontWeight(FontWeight.Medium)
-          .fontColor('#333')
+          .fontSize(15).fontWeight(FontWeight.Medium).fontColor('#333')
         Text(this.recordSummary(record))
-          .fontSize(13)
-          .fontColor('#888')
+          .fontSize(13).fontColor(record.endTime === 0 ? '#FF8C69' : '#888')
       }
-      .alignItems(HorizontalAlign.Start)
-      .layoutWeight(1)
+      .alignItems(HorizontalAlign.Start).layoutWeight(1)
 
-      Text(formatTime(record.startTime))
-        .fontSize(13)
-        .fontColor('#aaa')
+      if (record.endTime === 0) {
+        // 进行中的记录显示手动结束按钮
+        Button('结束')
+          .fontSize(12).fontColor('#FF8C69')
+          .backgroundColor('#FFF0E8')
+          .height(32).padding({ left: 12, right: 12 })
+          .borderRadius(8)
+          .onClick(() => { this.handleFinish(record.id) })
+      } else {
+        Text(formatTime(record.startTime))
+          .fontSize(13).fontColor('#aaa')
+      }
     }
     .padding({ left: 20, right: 20, top: 14, bottom: 14 })
-    .width('100%')
-    .backgroundColor('#FFFFFF')
+    .width('100%').backgroundColor('#FFFFFF')
   }
 
   build() {
