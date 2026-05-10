@@ -2,7 +2,8 @@ import router from '@ohos.router'
 import {
   BabyRecord, RecordType, ActiveActivity,
   formatTime, formatDuration,
-  recordTypeIcon, recordTypeLabel, feedTypeLabel, diaperTypeLabel
+  recordTypeIcon, recordTypeLabel, feedTypeLabel, diaperTypeLabel,
+  tempSiteLabel, formatTemp
 } from '../model/RecordModel'
 import { getRecordsByDate, deleteRecord, updateRecord } from '../database/RecordDB'
 
@@ -64,6 +65,8 @@ struct HistoryPage {
       return `${diaperTypeLabel(record.subType)}${color}`
     } else if (record.type === RecordType.SLEEP) {
       return record.endTime > 0 ? formatDuration(record.endTime - record.startTime) : '进行中'
+    } else if (record.type === RecordType.TEMPERATURE) {
+      return `${formatTemp(record.amount)} · ${tempSiteLabel(record.subType)}`
     }
     return ''
   }

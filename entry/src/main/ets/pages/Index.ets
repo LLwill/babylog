@@ -1,10 +1,12 @@
 import router from '@ohos.router'
 import vibrator from '@ohos.vibrator'
+import promptAction from '@ohos.promptAction'
 import {
-  RecordType, FeedType,
+  RecordType, FeedType, TempSite,
   BabyRecord, ActiveActivity,
   formatTimeAgo, formatTime, formatDuration,
-  recordTypeIcon, feedTypeLabel, diaperTypeLabel, formatDate
+  recordTypeIcon, feedTypeLabel, diaperTypeLabel, formatDate,
+  tempSiteLabel, tempColor, formatTemp
 } from '../model/RecordModel'
 import {
   insertRecord, getRecentRecords, getLastRecord, getLastCompletedRecord,
@@ -48,6 +50,9 @@ struct Index {
   @State sleepHours: string = '0'
   @State diaperCount: number = 0
   @State showFeedSheet: boolean = false
+  @State showTempSheet: boolean = false
+  @State tempValue: number = 37.0
+  @State tempSite: TempSite = TempSite.AXILLA
   @State currentTime: number = Date.now()
   @State feedBannerExpanded: boolean = false
   @State sleepBannerExpanded: boolean = false
@@ -243,6 +248,36 @@ struct Index {
     this.sleepSeconds = 0
     this.sleepBannerExpanded = false
     await this.loadData()
+  }
+
+  async saveTemperature(): Promise<void> {
+    doVibrate(50)
+    await insertRecord({
+      type: RecordType.TEMPERATURE,
+      startTime: Date.now(),
+      endTime: Date.now(),
+      subType: this.tempSite as string,
+      note: '',
+      imageUri: '',
+      amount: this.tempValue
+    })
+    this.showTempSheet = false
+    this.tempValue = 37.0
+    this.tempSite = TempSite.AXILLA
+    await this.loadData()
+  }
+
+  showMoreMenu(): void {
+    promptAction.showActionMenu({
+      title: '',
+      buttons: [
+        { text: '🌡️ 记录体温', color: '#333333' }
+      ]
+    }).then((result) => {
+      if (result.index === 0) {
+        this.showTempSheet = true
+      }
+    })
   }
 
   // 喂奶横幅
@@ -458,7 +493,78 @@ struct Index {
   }
 
   @Builder
-  RecentTimeline() {
+  TempSheet() {
+    Column({ space: 16 }) {
+      Text('🌡️ 记录体温')
+        .fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 16 })
+
+      // 快捷预设按钮
+      Grid() {
+        ForEach([36.5, 37.0, 37.5, 38.0, 38.5, 39.0], (val: number) => {
+          GridItem() {
+            Button(`${val.toFixed(1)}`)
+              .onClick(() => { this.tempValue = val })
+              .backgroundColor(this.tempValue === val ? tempColor(val) : '#F5F5F5')
+              .fontColor(this.tempValue === val ? Color.White : '#333')
+              .fontSize(16).width('100%').height(48).borderRadius(12)
+          }
+        })
+      }
+      .columnsTemplate('1fr 1fr 1fr').rowsGap(10).columnsGap(10)
+      .padding({ left: 20, right: 20 }).width('100%').height(116)
+
+      // 微调区
+      Row({ space: 20 }) {
+        Button('-')
+          .onClick(() => {
+            if (this.tempValue > 35.0) {
+              this.tempValue = Math.round((this.tempValue - 0.1) * 10) / 10
+            }
+          })
+          .backgroundColor('#F5F5F5').fontColor('#333')
+          .fontSize(24).width(56).height(56).borderRadius(28)
+
+        Text(formatTemp(this.tempValue))
+          .fontSize(36).fontWeight(FontWeight.Bold)
+          .fontColor(tempColor(this.tempValue))
+          .width(120).textAlign(TextAlign.Center)
+
+        Button('+')
+          .onClick(() => {
+            if (this.tempValue < 42.0) {
+              this.tempValue = Math.round((this.tempValue + 0.1) * 10) / 10
+            }
+          })
+          .backgroundColor('#F5F5F5').fontColor('#333')
+          .fontSize(24).width(56).height(56).borderRadius(28)
+      }
+      .justifyContent(FlexAlign.Center).width('100%')
+
+      // 测量部位
+      Row({ space: 10 }) {
+        ForEach([TempSite.AXILLA, TempSite.ORAL, TempSite.EAR], (site: TempSite) => {
+          Button(tempSiteLabel(site as string))
+            .onClick(() => { this.tempSite = site })
+            .backgroundColor(this.tempSite === site ? '#FF8C69' : '#F5F5F5')
+            .fontColor(this.tempSite === site ? Color.White : '#666')
+            .fontSize(14).height(36).borderRadius(18)
+            .layoutWeight(1)
+        })
+      }
+      .padding({ left: 20, right: 20 }).width('100%')
+
+      // 保存按钮
+      Button('保存记录')
+        .onClick(() => { this.saveTemperature() })
+        .backgroundColor('#FF8C69').fontColor(Color.White)
+        .fontSize(16).fontWeight(FontWeight.Bold)
+        .height(50).width('calc(100% - 40vp)').borderRadius(14)
+        .margin({ bottom: 40 })
+    }
+    .width('100%').backgroundColor('#FFF8F0').alignItems(HorizontalAlign.Center)
+  }
+
+
     Column({ space: 0 }) {
       Row() {
         Text('最近记录').fontSize(14).fontColor('#666').fontWeight(FontWeight.Medium)
@@ -534,12 +640,22 @@ struct Index {
         }
         .padding({ left: 4 })
       }
+
+      // 体温记录入口
+      Row() {
+        Text('🌡️ 记体温')
+          .fontSize(13).fontColor('#FF8C69')
+          .padding({ top: 12, bottom: 4 })
+          .onClick(() => { this.showTempSheet = true })
+      }
+      .width('100%').justifyContent(FlexAlign.Center)
     }
   }
 
   timelineColor(type: RecordType): string {
     if (type === RecordType.FEED) return '#FF8C69'
     if (type === RecordType.SLEEP) return '#7EC8C8'
+    if (type === RecordType.TEMPERATURE) return '#FF6B6B'
     return '#FFB347'
   }
 
@@ -548,12 +664,17 @@ struct Index {
       return `喂奶 · ${feedTypeLabel(item.subType)}`
     } else if (item.type === RecordType.DIAPER) {
       return `换尿布 · ${diaperTypeLabel(item.subType)}`
+    } else if (item.type === RecordType.TEMPERATURE) {
+      return `体温 · ${formatTemp(item.amount)}`
     } else {
       return '睡眠'
     }
   }
 
   timelineDetail(item: BabyRecord): string {
+    if (item.type === RecordType.TEMPERATURE) {
+      return tempSiteLabel(item.subType)
+    }
     if (item.endTime === 0) return '进行中…'
     if (item.type === RecordType.FEED || item.type === RecordType.SLEEP) {
       return formatDuration(item.endTime - item.startTime)
@@ -593,6 +714,10 @@ struct Index {
                 Text(`${this.diaperCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFB347')
                 Text('尿布').fontSize(11).fontColor('#aaa')
               }
+              // 更多菜单
+              Text('⋯')
+                .fontSize(22).fontColor('#999').padding({ left: 8 })
+                .onClick(() => { this.showMoreMenu() })
             }
           }
           .width('100%').padding({ left: 4, right: 4 })
@@ -621,6 +746,16 @@ struct Index {
       dragBar: true,
       backgroundColor: '#FFF8F0',
       onDisappear: () => { this.showFeedSheet = false }
+    })
+    .bindSheet(this.showTempSheet, this.TempSheet(), {
+      height: 460,
+      dragBar: true,
+      backgroundColor: '#FFF8F0',
+      onDisappear: () => {
+        this.showTempSheet = false
+        this.tempValue = 37.0
+        this.tempSite = TempSite.AXILLA
+      }
     })
   }
 }
