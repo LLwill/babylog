@@ -732,7 +732,7 @@ struct Index {
 
           Blank().height(20)
         }
-        .padding({ top: 16, left: 20, right: 20, bottom: 16 })
+        .padding({ top: 8, left: 20, right: 20, bottom: 16 })
         .width('100%')
       }
       .scrollable(ScrollDirection.Vertical)
