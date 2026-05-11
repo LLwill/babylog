@@ -50,6 +50,7 @@ struct RecordDetailPage {
   @State editAmount: string = ''
   @State editSubType: string = ''
   @State editTempValue: number = 37.0
+  @State refreshKey: number = 0
 
   aboutToAppear(): void {
     const params = router.getParams() as RouteParams
@@ -136,9 +137,8 @@ struct RecordDetailPage {
       end: new Date(),
       selected: new Date(cur),
       onAccept: (val: DatePickerResult) => {
-        const next = this.applyDate(cur, val.year, val.month, val.day)
-        this.editStartMs = 0
-        this.editStartMs = next
+        this.editStartMs = this.applyDate(cur, val.year, val.month, val.day)
+        this.refreshKey++
       }
     })
   }
@@ -149,9 +149,8 @@ struct RecordDetailPage {
       selected: new Date(cur),
       useMilitaryTime: true,
       onAccept: (val: TimePickerResult) => {
-        const next = this.applyTime(cur, val.hour, val.minute)
-        this.editStartMs = 0
-        this.editStartMs = next
+        this.editStartMs = this.applyTime(cur, val.hour, val.minute)
+        this.refreshKey++
       }
     })
   }
@@ -163,9 +162,8 @@ struct RecordDetailPage {
       end: new Date(),
       selected: new Date(cur),
       onAccept: (val: DatePickerResult) => {
-        const next = this.applyDate(cur, val.year, val.month, val.day)
-        this.editEndMs = 0
-        this.editEndMs = next
+        this.editEndMs = this.applyDate(cur, val.year, val.month, val.day)
+        this.refreshKey++
       }
     })
   }
@@ -176,9 +174,8 @@ struct RecordDetailPage {
       selected: new Date(cur),
       useMilitaryTime: true,
       onAccept: (val: TimePickerResult) => {
-        const next = this.applyTime(cur, val.hour, val.minute)
-        this.editEndMs = 0
-        this.editEndMs = next
+        this.editEndMs = this.applyTime(cur, val.hour, val.minute)
+        this.refreshKey++
       }
     })
   }
@@ -244,7 +241,7 @@ struct RecordDetailPage {
   PickerRow(label: string, value: string, onTap: () => void) {
     Row() {
       Text(label).fontSize(14).fontColor('#999').width(80)
-      Text(value).fontSize(14).fontColor('#333').layoutWeight(1)
+      Text(value + (this.refreshKey >= 0 ? '' : '')).fontSize(14).fontColor('#333').layoutWeight(1)
       Text('>').fontSize(14).fontColor('#ccc')
     }
     .width('100%').padding({ top: 14, bottom: 14 })
