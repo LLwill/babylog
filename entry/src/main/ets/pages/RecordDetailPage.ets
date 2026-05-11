@@ -130,43 +130,55 @@ struct RecordDetailPage {
   }
 
   pickStartDate(): void {
+    const cur = this.editStartMs
     DatePickerDialog.show({
       start: new Date('2020-01-01'),
       end: new Date(),
-      selected: new Date(this.editStartMs),
+      selected: new Date(cur),
       onAccept: (val: DatePickerResult) => {
-        this.editStartMs = this.applyDate(this.editStartMs, val.year, val.month, val.day)
+        const next = this.applyDate(cur, val.year, val.month, val.day)
+        this.editStartMs = 0
+        this.editStartMs = next
       }
     })
   }
 
   pickStartTime(): void {
+    const cur = this.editStartMs
     TimePickerDialog.show({
-      selected: new Date(this.editStartMs),
+      selected: new Date(cur),
       useMilitaryTime: true,
       onAccept: (val: TimePickerResult) => {
-        this.editStartMs = this.applyTime(this.editStartMs, val.hour, val.minute)
+        const next = this.applyTime(cur, val.hour, val.minute)
+        this.editStartMs = 0
+        this.editStartMs = next
       }
     })
   }
 
   pickEndDate(): void {
+    const cur = this.editEndMs
     DatePickerDialog.show({
       start: new Date('2020-01-01'),
       end: new Date(),
-      selected: new Date(this.editEndMs),
+      selected: new Date(cur),
       onAccept: (val: DatePickerResult) => {
-        this.editEndMs = this.applyDate(this.editEndMs, val.year, val.month, val.day)
+        const next = this.applyDate(cur, val.year, val.month, val.day)
+        this.editEndMs = 0
+        this.editEndMs = next
       }
     })
   }
 
   pickEndTime(): void {
+    const cur = this.editEndMs
     TimePickerDialog.show({
-      selected: new Date(this.editEndMs),
+      selected: new Date(cur),
       useMilitaryTime: true,
       onAccept: (val: TimePickerResult) => {
-        this.editEndMs = this.applyTime(this.editEndMs, val.hour, val.minute)
+        const next = this.applyTime(cur, val.hour, val.minute)
+        this.editEndMs = 0
+        this.editEndMs = next
       }
     })
   }
