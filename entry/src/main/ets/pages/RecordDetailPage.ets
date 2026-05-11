@@ -398,13 +398,44 @@ struct RecordDetailPage {
                 if (this.record.type === RecordType.TEMPERATURE) {
                   this.TempEditor()
                 }
-                // 开始时间
-                this.PickerRow('开始日期', this.formatMsDate(this.editStartMs), () => { this.pickStartDate() })
-                this.PickerRow('开始时间', this.formatMsTime(this.editStartMs), () => { this.pickStartTime() })
+                // 开始时间（内联读 @State，保证实时刷新）
+                Row() {
+                  Text('开始日期').fontSize(14).fontColor('#999').width(80)
+                  Text(this.formatMsDate(this.editStartMs)).fontSize(14).fontColor('#333').layoutWeight(1)
+                  Text('>').fontSize(14).fontColor('#ccc')
+                }
+                .width('100%').padding({ top: 14, bottom: 14 })
+                .onClick(() => { this.pickStartDate() })
+                Divider().color('#F5F5F5').strokeWidth(1)
+
+                Row() {
+                  Text('开始时间').fontSize(14).fontColor('#999').width(80)
+                  Text(this.formatMsTime(this.editStartMs)).fontSize(14).fontColor('#333').layoutWeight(1)
+                  Text('>').fontSize(14).fontColor('#ccc')
+                }
+                .width('100%').padding({ top: 14, bottom: 14 })
+                .onClick(() => { this.pickStartTime() })
+                Divider().color('#F5F5F5').strokeWidth(1)
+
                 // 结束时间（喂奶/睡眠）
                 if (this.record.type === RecordType.FEED || this.record.type === RecordType.SLEEP) {
-                  this.PickerRow('结束日期', this.formatMsDate(this.editEndMs), () => { this.pickEndDate() })
-                  this.PickerRow('结束时间', this.formatMsTime(this.editEndMs), () => { this.pickEndTime() })
+                  Row() {
+                    Text('结束日期').fontSize(14).fontColor('#999').width(80)
+                    Text(this.formatMsDate(this.editEndMs)).fontSize(14).fontColor('#333').layoutWeight(1)
+                    Text('>').fontSize(14).fontColor('#ccc')
+                  }
+                  .width('100%').padding({ top: 14, bottom: 14 })
+                  .onClick(() => { this.pickEndDate() })
+                  Divider().color('#F5F5F5').strokeWidth(1)
+
+                  Row() {
+                    Text('结束时间').fontSize(14).fontColor('#999').width(80)
+                    Text(this.formatMsTime(this.editEndMs)).fontSize(14).fontColor('#333').layoutWeight(1)
+                    Text('>').fontSize(14).fontColor('#ccc')
+                  }
+                  .width('100%').padding({ top: 14, bottom: 14 })
+                  .onClick(() => { this.pickEndTime() })
+                  Divider().color('#F5F5F5').strokeWidth(1)
                 }
                 // 奶量（喂奶专属）
                 if (this.record.type === RecordType.FEED) {
