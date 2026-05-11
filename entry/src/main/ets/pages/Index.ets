@@ -690,14 +690,15 @@ struct Index {
 
   build() {
     Column() {
-      // 喂奶横幅
+      // 顶部活动横幅
       this.FeedBanner()
-      // 睡眠横幅
       this.SleepBanner()
 
-      // 顶部固定区域（不参与滚动）
-      Column({ space: 16 }) {
-        Row() {
+      // 中间滚动区（占满剩余高度）
+      Scroll() {
+        Column({ space: 16 }) {
+          // 标题 + 今日摘要
+          Row() {
             Column({ space: 2 }) {
               Text('宝宝').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#333')
               Text(formatDate(this.currentTime)).fontSize(13).fontColor('#999')
@@ -716,7 +717,6 @@ struct Index {
                 Text(`${this.diaperCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFB347')
                 Text('尿布').fontSize(11).fontColor('#aaa')
               }
-              // 更多菜单
               Text('⋯')
                 .fontSize(22).fontColor('#999').padding({ left: 8 })
                 .onClick(() => { this.showMoreMenu() })
@@ -724,26 +724,24 @@ struct Index {
           }
           .width('100%').padding({ left: 4, right: 4 })
 
+          // 上次记录卡
           this.LastRecordCard()
-        }
-        .padding({ top: 16, left: 20, right: 20, bottom: 0 })
-        .width('100%')
 
-      // 时间轴滚动区：内容多少占多少，不撑满
-      Scroll() {
-        Column() {
+          // 最近时间轴
           this.RecentTimeline()
-          Blank().height(100)
+
+          Blank().height(20)
         }
-        .padding({ left: 20, right: 20 })
+        .padding({ top: 16, left: 20, right: 20, bottom: 16 })
         .width('100%')
       }
       .scrollable(ScrollDirection.Vertical)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
+      .layoutWeight(1)
       .width('100%')
 
-      // 固定底部操作栏（不在 Scroll 内）
+      // 固定底部操作栏
       Column() {
         Divider().color('#F0F0F0').strokeWidth(1)
         this.ActionButtons()
