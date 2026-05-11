@@ -695,8 +695,9 @@ struct Index {
       // 睡眠横幅
       this.SleepBanner()
 
-        Column({ space: 16 }) {
-          Row() {
+      // 顶部固定区域（不参与滚动）
+      Column({ space: 16 }) {
+        Row() {
             Column({ space: 2 }) {
               Text('宝宝').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#333')
               Text(formatDate(this.currentTime)).fontSize(13).fontColor('#999')
@@ -724,20 +725,26 @@ struct Index {
           .width('100%').padding({ left: 4, right: 4 })
 
           this.LastRecordCard()
-          // 时间轴滚动区，占剩余高度
-          Scroll() {
-            this.RecentTimeline()
-          }
-          .scrollable(ScrollDirection.Vertical)
-          .scrollBar(BarState.Off)
-          .edgeEffect(EdgeEffect.None)
-          .layoutWeight(1)
-          .width('100%')
         }
         .padding({ top: 16, left: 20, right: 20, bottom: 0 })
-        .layoutWeight(1).width('100%')
+        .width('100%')
 
-      // 固定底部操作栏
+      // 时间轴滚动区：内容多少占多少，不撑满
+      Scroll() {
+        Column() {
+          this.RecentTimeline()
+          Blank().height(100)
+        }
+        .padding({ left: 20, right: 20 })
+        .width('100%')
+      }
+      .scrollable(ScrollDirection.Vertical)
+      .scrollBar(BarState.Off)
+      .edgeEffect(EdgeEffect.Spring)
+      .layoutWeight(1)
+      .width('100%')
+
+      // 固定底部操作栏（不在 Scroll 内）
       Column() {
         Divider().color('#F0F0F0').strokeWidth(1)
         this.ActionButtons()
