@@ -724,14 +724,17 @@ struct Index {
           .width('100%').padding({ left: 4, right: 4 })
 
           this.LastRecordCard()
-          // 主滚动区
+          // 时间轴滚动区，占剩余高度
           Scroll() {
             this.RecentTimeline()
           }
           .scrollable(ScrollDirection.Vertical)
-          Blank().height(100)
+          .scrollBar(BarState.Off)
+          .edgeEffect(EdgeEffect.None)
+          .layoutWeight(1)
+          .width('100%')
         }
-        .padding({ top: 16, left: 20, right: 20, bottom: 20 })
+        .padding({ top: 16, left: 20, right: 20, bottom: 0 })
         .layoutWeight(1).width('100%')
 
       // 固定底部操作栏
