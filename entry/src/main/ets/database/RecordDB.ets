@@ -162,6 +162,41 @@ export async function deleteRecord(id: number): Promise<void> {
   await store.delete(predicates)
 }
 
+export async function getRecordById(id: number): Promise<BabyRecord | null> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('id', id)
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  const records = cursorToRecords(cursor)
+  return records.length > 0 ? records[0] : null
+}
+
+export async function updateFullRecord(record: BabyRecord): Promise<void> {
+  const store = getStore()
+  const valueBucket: relationalStore.ValuesBucket = {
+    'type': record.type as string,
+    'start_time': record.startTime,
+    'end_time': record.endTime,
+    'sub_type': record.subType,
+    'note': record.note,
+    'image_uri': record.imageUri,
+    'amount': record.amount
+  }
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.equalTo('id', record.id)
+  await store.update(valueBucket, predicates)
+}
+
+export async function getAllRecords(): Promise<BabyRecord[]> {
+  const store = getStore()
+  const predicates = new relationalStore.RdbPredicates(TABLE_NAME)
+  predicates.orderByDesc('start_time')
+  const cursor = await store.query(predicates,
+    ['id', 'type', 'start_time', 'end_time', 'sub_type', 'note', 'image_uri', 'amount'])
+  return cursorToRecords(cursor)
+}
+
 export async function getRecentRecords(limit: number): Promise<BabyRecord[]> {
   const store = getStore()
   const predicates = new relationalStore.RdbPredicates(TABLE_NAME)

@@ -18,8 +18,13 @@ struct HistoryPage {
   @State groups: DateGroup[] = []
   @State loading: boolean = false
   @State deleteTargetId: number = -1
+  @State showAddMenu: boolean = false
 
   aboutToAppear(): void {
+    this.loadRecords()
+  }
+
+  onPageShow(): void {
     this.loadRecords()
   }
 
@@ -153,6 +158,49 @@ struct HistoryPage {
     }
     .padding({ left: 20, right: 20, top: 14, bottom: 14 })
     .width('100%').backgroundColor('#FFFFFF')
+    .onClick(() => {
+      router.pushUrl({ url: 'pages/RecordDetailPage', params: { recordId: record.id, isNew: false } })
+    })
+  }
+
+  @Builder
+  AddTypeSheet() {
+    Column({ space: 12 }) {
+      Text('选择记录类型').fontSize(16).fontWeight(FontWeight.Medium).margin({ top: 16 })
+      Column({ space: 10 }) {
+        Button('🍼  喂奶')
+          .onClick(() => {
+            this.showAddMenu = false
+            router.pushUrl({ url: 'pages/RecordDetailPage', params: { isNew: true, defaultType: 'FEED' } })
+          })
+          .backgroundColor('#FFF0E8').fontColor('#FF8C69')
+          .fontSize(16).width('100%').height(54).borderRadius(14)
+        Button('🧷  换尿布')
+          .onClick(() => {
+            this.showAddMenu = false
+            router.pushUrl({ url: 'pages/RecordDetailPage', params: { isNew: true, defaultType: 'DIAPER' } })
+          })
+          .backgroundColor('#FFF3E0').fontColor('#FFB347')
+          .fontSize(16).width('100%').height(54).borderRadius(14)
+        Button('😴  睡眠')
+          .onClick(() => {
+            this.showAddMenu = false
+            router.pushUrl({ url: 'pages/RecordDetailPage', params: { isNew: true, defaultType: 'SLEEP' } })
+          })
+          .backgroundColor('#E8F6F6').fontColor('#7EC8C8')
+          .fontSize(16).width('100%').height(54).borderRadius(14)
+        Button('🌡️  体温')
+          .onClick(() => {
+            this.showAddMenu = false
+            router.pushUrl({ url: 'pages/RecordDetailPage', params: { isNew: true, defaultType: 'TEMPERATURE' } })
+          })
+          .backgroundColor('#FFF0F0').fontColor('#FF6B6B')
+          .fontSize(16).width('100%').height(54).borderRadius(14)
+      }
+      .padding({ left: 20, right: 20 })
+      Blank().height(40)
+    }
+    .width('100%').backgroundColor('#FFF8F0')
   }
 
   build() {
@@ -165,7 +213,9 @@ struct HistoryPage {
         Text('历史记录')
           .fontSize(18).fontWeight(FontWeight.Medium).fontColor('#333')
         Blank()
-        Text('  ').padding(12)
+        Text('+')
+          .fontSize(24).fontColor('#FF8C69').padding(12)
+          .onClick(() => { this.showAddMenu = true })
       }
       .width('100%')
       .padding({ left: 8, right: 8, top: 8 })
@@ -213,5 +263,11 @@ struct HistoryPage {
     .width('100%')
     .height('100%')
     .backgroundColor('#FFF8F0')
+    .bindSheet(this.showAddMenu, this.AddTypeSheet(), {
+      height: 380,
+      dragBar: true,
+      backgroundColor: '#FFF8F0',
+      onDisappear: () => { this.showAddMenu = false }
+    })
   }
 }
