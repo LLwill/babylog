@@ -741,7 +741,6 @@ struct Index {
       .scrollable(ScrollDirection.Vertical)
       .scrollBar(BarState.Off)
       .edgeEffect(EdgeEffect.Spring)
-      .layoutWeight(1)
       .width('100%')
 
       // 固定底部操作栏（不在 Scroll 内）
