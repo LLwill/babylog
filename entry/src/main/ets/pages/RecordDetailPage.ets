@@ -203,7 +203,7 @@ struct RecordDetailPage {
           amount
         })
       }
-      router.back()
+      router.replaceUrl({ url: 'pages/HistoryPage' })
     } catch {}
     this.saving = false
   }
@@ -212,7 +212,7 @@ struct RecordDetailPage {
     doVibrate(100)
     try {
       await deleteRecord(this.record.id)
-      router.back()
+      router.replaceUrl({ url: 'pages/HistoryPage' })
     } catch {}
   }
 
