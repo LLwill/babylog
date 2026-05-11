@@ -167,7 +167,7 @@ struct Index {
 
   async loadData(): Promise<void> {
     try {
-      const recent = await getRecentRecords(5)
+      const recent = await getRecentRecords(10)
       const lastFeed = await getLastCompletedRecord(RecordType.FEED)
       const lastDiaper = await getLastRecord(RecordType.DIAPER)
       const lastSleep = await getLastCompletedRecord(RecordType.SLEEP)
@@ -582,66 +582,78 @@ struct Index {
           .fontSize(13).fontColor('#bbb').textAlign(TextAlign.Center)
           .width('100%').padding({ top: 20, bottom: 20 })
       } else {
-        Column({ space: 0 }) {
-          ForEach(this.recentRecords, (item: BabyRecord, index: number) => {
-            Row({ space: 0 }) {
-              Column() {
+
+        Scroll() {
+          Column({ space: 0 }) {
+            ForEach(this.recentRecords, (item: BabyRecord, index: number) => {
+              Row({ space: 0 }) {
                 Column() {
-                  Text(recordTypeIcon(item.type)).fontSize(16)
-                }
-                .width(36).height(36)
-                .backgroundColor('#FFFFFF')
-                .borderRadius(18)
-                .border({ width: 2, color: this.timelineColor(item.type) })
-                .justifyContent(FlexAlign.Center)
-                .alignItems(HorizontalAlign.Center)
-                .shadow({ radius: 4, color: '#0F000000', offsetX: 0, offsetY: 1 })
+                  Column() {
+                    Text(recordTypeIcon(item.type)).fontSize(16)
+                  }
+                  .width(36)
+                  .height(36)
+                  .backgroundColor('#FFFFFF')
+                  .borderRadius(18)
+                  .border({ width: 2, color: this.timelineColor(item.type) })
+                  .justifyContent(FlexAlign.Center)
+                  .alignItems(HorizontalAlign.Center)
+                  .shadow({
+                    radius: 4,
+                    color: '#0F000000',
+                    offsetX: 0,
+                    offsetY: 1
+                  })
 
-                if (index < this.recentRecords.length - 1) {
-                  Column()
-                    .width(2).height(24)
-                    .backgroundColor('#E8E8E8')
-                    .margin({ top: 2 })
-                }
-              }
-              .width(36).alignItems(HorizontalAlign.Center)
-
-              Column({ space: 2 }) {
-                Row() {
-                  Text(this.timelineTitle(item))
-                    .fontSize(14).fontWeight(FontWeight.Medium).fontColor('#333')
-                  Blank()
-                  if (item.endTime === 0) {
-                    // 进行中：点击展开对应横幅
-                    Text('去结束 >')
-                      .fontSize(12).fontColor('#FF8C69')
-                      .onClick(() => {
-                        if (item.type === RecordType.FEED) {
-                          this.feedBannerExpanded = true
-                        } else if (item.type === RecordType.SLEEP) {
-                          this.sleepBannerExpanded = true
-                        }
-                      })
-                  } else {
-                    Text(formatTimeAgo(item.startTime))
-                      .fontSize(12).fontColor('#bbb')
+                  if (index < this.recentRecords.length - 1) {
+                    Column()
+                      .width(2).height(24)
+                      .backgroundColor('#E8E8E8')
+                      .margin({ top: 2 })
                   }
                 }
-                .width('100%')
+                .width(36).alignItems(HorizontalAlign.Center)
 
-                if (this.timelineDetail(item)) {
-                  Text(this.timelineDetail(item))
-                    .fontSize(12).fontColor(item.endTime === 0 ? '#FF8C69' : '#999')
+                Column({ space: 2 }) {
+                  Row() {
+                    Text(this.timelineTitle(item))
+                      .fontSize(14).fontWeight(FontWeight.Medium).fontColor('#333')
+                    Blank()
+                    if (item.endTime === 0) {
+                      // 进行中：点击展开对应横幅
+                      Text('去结束 >')
+                        .fontSize(12).fontColor('#FF8C69')
+                        .onClick(() => {
+                          if (item.type === RecordType.FEED) {
+                            this.feedBannerExpanded = true
+                          } else if (item.type === RecordType.SLEEP) {
+                            this.sleepBannerExpanded = true
+                          }
+                        })
+                    } else {
+                      Text(formatTimeAgo(item.startTime))
+                        .fontSize(12).fontColor('#bbb')
+                    }
+                  }
+                  .width('100%')
+
+                  if (this.timelineDetail(item)) {
+                    Text(this.timelineDetail(item))
+                      .fontSize(12).fontColor(item.endTime === 0 ? '#FF8C69' : '#999')
+                  }
                 }
+                .layoutWeight(1)
+                .padding({ left: 12, top: 4, bottom: 8 })
+                .alignItems(HorizontalAlign.Start)
               }
-              .layoutWeight(1)
-              .padding({ left: 12, top: 4, bottom: 8 })
-              .alignItems(HorizontalAlign.Start)
-            }
-            .width('100%').alignItems(VerticalAlign.Top)
-          })
+              .width('100%').alignItems(VerticalAlign.Top)
+            })
+          }
+          .padding({ left: 4 })
         }
-        .padding({ left: 4 })
+        .layoutWeight(1)
+        .align(Alignment.TopStart)
+        .scrollBar(BarState.Off)
       }
 
       // 体温记录入口
@@ -653,6 +665,7 @@ struct Index {
       }
       .width('100%').justifyContent(FlexAlign.Center)
     }
+    .layoutWeight(1)
   }
 
   timelineColor(type: RecordType): string {
@@ -695,51 +708,54 @@ struct Index {
       this.SleepBanner()
 
       // 中间滚动区（占满剩余高度）
-      Scroll() {
-        Column({ space: 16 }) {
-          // 标题 + 今日摘要
-          Row() {
-            Column({ space: 2 }) {
-              Text('宝宝').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#333')
-              Text(formatDate(this.currentTime)).fontSize(13).fontColor('#999')
-            }
-            Blank()
-            Row({ space: 20 }) {
-              Column({ space: 2 }) {
-                Text(`${this.feedCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FF8C69')
-                Text('喂奶').fontSize(11).fontColor('#aaa')
-              }
-              Column({ space: 2 }) {
-                Text(this.sleepHours).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#7EC8C8')
-                Text('睡眠').fontSize(11).fontColor('#aaa')
-              }
-              Column({ space: 2 }) {
-                Text(`${this.diaperCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFB347')
-                Text('尿布').fontSize(11).fontColor('#aaa')
-              }
-              Text('⋯')
-                .fontSize(22).fontColor('#999').padding({ left: 8 })
-                .onClick(() => { this.showMoreMenu() })
-            }
+      Column({ space: 16 }) {
+        // 标题 + 今日摘要
+        Row() {
+          Column({ space: 2 }) {
+            Text('宝宝').fontSize(22).fontWeight(FontWeight.Bold).fontColor('#333')
+            Text(formatDate(this.currentTime)).fontSize(13).fontColor('#999')
           }
-          .width('100%').padding({ left: 4, right: 4 })
-
-          // 上次记录卡
-          this.LastRecordCard()
-
-          // 最近时间轴
-          this.RecentTimeline()
-
-          Blank().height(20)
+          Blank()
+          Row({ space: 20 }) {
+            Column({ space: 2 }) {
+              Text(`${this.feedCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FF8C69')
+              Text('喂奶').fontSize(11).fontColor('#aaa')
+            }
+            Column({ space: 2 }) {
+              Text(this.sleepHours).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#7EC8C8')
+              Text('睡眠').fontSize(11).fontColor('#aaa')
+            }
+            Column({ space: 2 }) {
+              Text(`${this.diaperCount}`).fontSize(20).fontWeight(FontWeight.Bold).fontColor('#FFB347')
+              Text('尿布').fontSize(11).fontColor('#aaa')
+            }
+            Text('⋯')
+              .fontSize(22).fontColor('#999').padding({ left: 8 })
+              .onClick(() => { this.showMoreMenu() })
+          }
         }
-        .padding({ top: 8, left: 20, right: 20, bottom: 16 })
-        .width('100%')
+        .width('100%').padding({ left: 4, right: 4 })
+
+
+
+
+        Blank().height(20)
       }
-      .scrollable(ScrollDirection.Vertical)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.Spring)
-      .layoutWeight(1)
+      .padding({ top: 16, left: 20, right: 20, bottom: 0 })
       .width('100%')
+
+      Column({space:16}) {
+
+        // 上次记录卡
+        this.LastRecordCard()
+
+        // 最近时间轴
+          this.RecentTimeline()
+      }
+      .layoutWeight(1)
+      .padding({ top: 0, left: 20, right: 20, bottom: 16 })
+      .width('100%')
+
 
       // 固定底部操作栏
       Column() {
