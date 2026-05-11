@@ -695,8 +695,6 @@ struct Index {
       // 睡眠横幅
       this.SleepBanner()
 
-      // 主滚动区
-      Scroll() {
         Column({ space: 16 }) {
           Row() {
             Column({ space: 2 }) {
@@ -726,15 +724,15 @@ struct Index {
           .width('100%').padding({ left: 4, right: 4 })
 
           this.LastRecordCard()
-          this.RecentTimeline()
+          // 主滚动区
+          Scroll() {
+            this.RecentTimeline()
+          }
+          .scrollable(ScrollDirection.Vertical)
           Blank().height(100)
         }
         .padding({ top: 16, left: 20, right: 20, bottom: 20 })
-      }
-      .scrollable(ScrollDirection.Vertical)
-      .scrollBar(BarState.Off)
-      .edgeEffect(EdgeEffect.None)
-      .layoutWeight(1).width('100%')
+        .layoutWeight(1).width('100%')
 
       // 固定底部操作栏
       Column() {

@@ -1,6 +1,20 @@
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/will/.ohos/config/default_babylog_wxlakIkpCfZMf1rkqtCTKxzb3mPN8nspuqDPrJDvn04=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001BDAF97EB27E32F30181954FFDBF31B0B101FA7FAD8DDF64DD00DDBEB569CB5A77F9980182E92406",
+          "profile": "/Users/will/.ohos/config/default_babylog_wxlakIkpCfZMf1rkqtCTKxzb3mPN8nspuqDPrJDvn04=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/will/.ohos/config/default_babylog_wxlakIkpCfZMf1rkqtCTKxzb3mPN8nspuqDPrJDvn04=.p12",
+          "storePassword": "0000001B693B3FE348CCF68967DCAC3B56865E7CFF64CAC07800F4B8754916202A818C875720C078CB770D"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
